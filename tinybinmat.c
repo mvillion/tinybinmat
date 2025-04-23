@@ -1,5 +1,45 @@
 #include <tinybinmat_utils.h>
 
+void tbm_print8(
+    uint8_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        for (uint8_t i_row = 0; i_row < n_bit; i_row++)
+        {
+            uint8_t row = mat_list[i_row];
+            for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
+            {
+                printf("%c", str01[row & 1]);
+                row >>= 1;
+            }
+            printf("\n");
+        }
+        mat_list += 8*sizeof(uint8_t);
+        printf("\n");
+    }
+}
+
+void tbm_print16(
+    uint16_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        for (uint8_t i_row = 0; i_row < n_bit; i_row++)
+        {
+            uint16_t row = mat_list[i_row];
+            for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
+            {
+                printf("%c", str01[row & 1]);
+                row >>= 1;
+            }
+            printf("\n");
+        }
+        mat_list += 8*sizeof(uint16_t);
+        printf("\n");
+    }
+}
+
 //______________________________________________________________________________
 static PyObject* tbm_print(PyObject *self, PyObject *arg)
 {
@@ -34,28 +74,22 @@ static PyObject* tbm_print(PyObject *self, PyObject *arg)
     // PyArray_GETCONTIGUOUS will increase the reference count.
     arr_in = PyArray_GETCONTIGUOUS(arr_in);
 
+    npy_intp size_type = PyArray_ITEMSIZE(arr_in);
+    if (n_bit_raw != 8*size_type)
+        return failure(
+            PyExc_RuntimeError, 
+            "last dimension shall be equal to the number of bits of the type");
+
     int py_type = PyArray_TYPE(arr_in);
-    if (py_type == NPY_UINT16)
+    if (py_type == NPY_UINT8)
     {
-        if (n_bit_raw != 8*sizeof(uint16_t))
-            return failure(
-                PyExc_RuntimeError, "last dimension shall be 16 for uint16");
-        uint16_t *data = (uint16_t *)PyArray_DATA(arr_in);
-        for (npy_intp i_mat = 0; i_mat < n_mat; i_mat++)
-        {
-            for (uint8_t i_row = 0; i_row < n_bit; i_row++)
-            {
-                uint16_t row = data[i_row];
-                for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
-                {
-                    printf("%c", str01[row & 1]);
-                    row >>= 1;
-                }
-                printf("\n");
-            }
-            data += n_bit_raw;
-            printf("\n");
-        }
+        uint8_t *mat_list = (uint8_t *)PyArray_DATA(arr_in);
+        tbm_print8(mat_list, n_mat, n_bit, str01);
+    }
+    else if (py_type == NPY_UINT16)
+    {
+        uint16_t *mat_list = (uint16_t *)PyArray_DATA(arr_in);
+        tbm_print16(mat_list, n_mat, n_bit, str01);
     }
 
     // decrease the reference count
