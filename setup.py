@@ -1,0 +1,40 @@
+import numpy
+import os
+
+from setuptools import Extension, setup
+from sysconfig import get_paths
+
+inc_dir = {
+    "include_dirs": [
+        os.path.dirname(__file__), numpy.get_include(), get_paths()["include"],
+    ]}
+
+
+def src_from_name(name, cflag=None):
+    out = {
+        "sources": ["%s.c" % name],
+    }
+    if cflag is not None:
+        if type(cflag) is not list:
+            cflag = [cflag]
+        out["cflags"] = cflag
+    return out
+
+cflag = ["-O3", "-mavx2"]
+lib_list = [
+    # ("tinybinmat_conv", src_from_name("tinybinmat_conv", cflag=cflag)),
+    ("tinybinmat_utils", {"sources": ["tinybinmat_utils.c"]} | inc_dir),
+]
+
+setup(
+    libraries=lib_list,
+    ext_modules=[
+        Extension(
+            name="tinybinmat", sources=["tinybinmat.c"],
+            extra_compile_args=[],
+            include_dirs=[os.path.dirname(__file__), numpy.get_include()],
+            libraries=[k[0] for k in lib_list],
+        ),
+    ],
+    setup_requires=["setuptools-git-versioning"]
+)

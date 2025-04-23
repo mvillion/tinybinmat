@@ -1,0 +1,21 @@
+# pyproject.toml
+[build-system]
+requires = ["numpy", "setuptools", "setuptools-git-versioning"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools-git-versioning]
+enabled = true
+
+[project]
+name = "tinybinmat"
+authors = [{name = "Mathieu Villion", email = "mvillion@gmail.com"}]
+description = "library for tiny bit matrices"
+readme = "README.md"
+classifiers = [
+    "Topic :: Scientific/Engineering",
+    "Topic :: Utilities",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3.13",
+]
+requires-python = ">=3.13, <4"
+dynamic = ["version"]

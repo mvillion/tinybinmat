@@ -1,9 +1,10 @@
 # tinybinmat
 library for tiny bit matrix manipulation
+The library is written in C with Python bindings.
 
 # I. Installation
 
-You probably have already installed echo_asm package using this command:
+Python bindings can be compiled using:
 
 ```
 >> python3 -m build -w
