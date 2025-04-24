@@ -41,7 +41,8 @@ void tbm_print16(
 }
 
 void tbm_sprint8(
-    uint8_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01, uint8_t *out)
+    uint8_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01,
+    uint8_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
@@ -55,6 +56,25 @@ void tbm_sprint8(
             }
         }
         mat_list += 8*sizeof(uint8_t);
+    }
+}
+
+void tbm_sprint16(
+    uint16_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01,
+    uint8_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        for (uint8_t i_row = 0; i_row < n_bit; i_row++)
+        {
+            uint16_t row = mat_list[i_row];
+            for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
+            {
+                *out++ = str01[row & 1];
+                row >>= 1;
+            }
+        }
+        mat_list += 8*sizeof(uint16_t);
     }
 }
 
@@ -167,8 +187,12 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg)
     int py_type = PyArray_TYPE(arr_in);
     if (py_type == NPY_UINT8)
     {
-        uint8_t *mat_list = (uint8_t *)PyArray_DATA(arr_in);
-        tbm_sprint8(mat_list, n_mat, n_bit, str01, out);
+        tbm_sprint8((uint8_t *)PyArray_DATA(arr_in), n_mat, n_bit, str01, out);
+    }
+    else if (py_type == NPY_UINT16)
+    {
+        tbm_sprint16(
+            (uint16_t *)PyArray_DATA(arr_in), n_mat, n_bit, str01, out);
     }
 
     // decrease the reference count

@@ -46,3 +46,6 @@ if __name__ == "__main__":
     mat = np.random.randint(0, 2**n_bit-1, (n_run, 16), dtype=np.uint16)
     mat[:, n_bit:] = 0
     tinybinmat.print(mat, n_bit, " x")
+
+    mat16 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    print(mat16)
