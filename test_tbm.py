@@ -42,6 +42,9 @@ if __name__ == "__main__":
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
     print(mats)
 
+    transpose8 = tinybinmat.transpose(mat, n_bit)
+    tinybinmat.print(transpose8, n_bit, " x")
+
     n_bit = 10
     mat = np.random.randint(0, 2**n_bit-1, (n_run, 16), dtype=np.uint16)
     mat[:, n_bit:] = 0
