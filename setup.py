@@ -30,7 +30,7 @@ setup(
     libraries=lib_list,
     ext_modules=[
         Extension(
-            name="tinybinmat", sources=["tinybinmat.c"],
+            name="tinybinmat", sources=["tinybinmat_py.c"],
             extra_compile_args=[],
             include_dirs=[os.path.dirname(__file__), numpy.get_include()],
             libraries=[k[0] for k in lib_list],
