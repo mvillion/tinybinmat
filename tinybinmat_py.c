@@ -164,8 +164,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
     {
         uint64_t *in8x8 = (uint64_t *)PyArray_DATA(arr_in);
         uint64_t *out8x8 = (uint64_t *)out;
-        for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
-            out8x8[i_mat] = tbm_transpose64(in8x8[i_mat]);
+        tbm_transpose64(in8x8, n_mat, out8x8);
     }
     else if (py_type == NPY_UINT16)
     {

@@ -78,7 +78,7 @@ void tbm_sprint16(
     }
 }
 
-uint64_t tbm_transpose64(uint64_t in8x8)
+uint64_t tbm_transpose64_uint64(uint64_t in8x8)
 {
     // input is 8x8 bit matrix with rows 8 rows: 0x0706050403020100
     // 1st bit in rows is LSB, thus reversed compared to matrix notation
@@ -109,36 +109,9 @@ uint64_t tbm_transpose64(uint64_t in8x8)
     return in8x8;
 }
 
-void inline transpose8x8_int16(
-    __m256i hgfedcba4_hgfedcba0, __m256i hgfedcba5_hgfedcba1,
-    __m256i hgfedcba6_hgfedcba2, __m256i hgfedcba7_hgfedcba3,
-    __m256i *b76543210_a76543210, __m256i *d76543210_c76543210,
-    __m256i *f76543210_e76543210, __m256i *h76543210_g76543210)
+void tbm_transpose64(uint64_t *in8x8, uint64_t n_mat, uint64_t *out8x8)
 {
-    __m256i d5d4c5c4b5b4a5a4_d1d0c1c0b1b0a1a0 = _mm256_unpacklo_epi16(
-        hgfedcba4_hgfedcba0, hgfedcba5_hgfedcba1);
-    __m256i h5h4g5g4f5f4e5e4_h1h0g1g0f1f0e1e0 = _mm256_unpackhi_epi16(
-        hgfedcba4_hgfedcba0, hgfedcba5_hgfedcba1);
-    __m256i d7d6c7c6b7b6a7a6_d3d2c3c2b3b2a3a2 = _mm256_unpacklo_epi16(
-        hgfedcba6_hgfedcba2, hgfedcba7_hgfedcba3);
-    __m256i h7h6g7g6f7f6e7e6_h3h2g3g2f3f2e3e2 = _mm256_unpackhi_epi16(
-        hgfedcba6_hgfedcba2, hgfedcba7_hgfedcba3);
-
-    __m256i b7b6b5b4a7a6a5a4_b3b2b1b0a3a2a1a0 = _mm256_unpacklo_epi32(
-        d5d4c5c4b5b4a5a4_d1d0c1c0b1b0a1a0, d7d6c7c6b7b6a7a6_d3d2c3c2b3b2a3a2);
-    __m256i d7d6d5d4c7c6c5c4_d3d2d1d0c3c2c1c0 = _mm256_unpackhi_epi32(
-        d5d4c5c4b5b4a5a4_d1d0c1c0b1b0a1a0, d7d6c7c6b7b6a7a6_d3d2c3c2b3b2a3a2);
-    __m256i f7f6f5f4e7e6e5e4_f3f2f1f0e3e2e1e0 = _mm256_unpacklo_epi32(
-        h5h4g5g4f5f4e5e4_h1h0g1g0f1f0e1e0, h7h6g7g6f7f6e7e6_h3h2g3g2f3f2e3e2);
-    __m256i h7h6h5h4g7g6g5g4_h3h2h1h0g3g2g1g0 = _mm256_unpackhi_epi32(
-        h5h4g5g4f5f4e5e4_h1h0g1g0f1f0e1e0, h7h6g7g6f7f6e7e6_h3h2g3g2f3f2e3e2);
-
-    *b76543210_a76543210 = _mm256_permute4x64_epi64(
-        b7b6b5b4a7a6a5a4_b3b2b1b0a3a2a1a0, _MM_SHUFFLE(3, 1, 2, 0));
-    *d76543210_c76543210 = _mm256_permute4x64_epi64(
-        d7d6d5d4c7c6c5c4_d3d2d1d0c3c2c1c0, _MM_SHUFFLE(3, 1, 2, 0));
-    *f76543210_e76543210 = _mm256_permute4x64_epi64(
-        f7f6f5f4e7e6e5e4_f3f2f1f0e3e2e1e0, _MM_SHUFFLE(3, 1, 2, 0));
-    *h76543210_g76543210 = _mm256_permute4x64_epi64(
-        h7h6h5h4g7g6g5g4_h3h2h1h0g3g2g1g0, _MM_SHUFFLE(3, 1, 2, 0));
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+        out8x8[i_mat] = tbm_transpose64_uint64(in8x8[i_mat]);
 }
+

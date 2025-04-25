@@ -38,8 +38,8 @@ if __name__ == "__main__":
     mat_print = mat[:n_print, :]
     tinybinmat.print(mat_print, n_bit, " x")
 
-    mat8 = tinybinmat.sprint(mat_print, n_bit, np.arange(2, dtype=np.uint8))
-    print(mat8)
+    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    print(mat8[:n_print, :, :])
 
     mats = tinybinmat.sprint(mat_print, n_bit, np.frombuffer(b" x", np.uint8))
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
@@ -56,5 +56,5 @@ if __name__ == "__main__":
     mat_print = mat[:n_print, :]
     tinybinmat.print(mat_print, n_bit, " x")
 
-    mat16 = tinybinmat.sprint(mat_print, n_bit, np.arange(2, dtype=np.uint8))
-    print(mat16)
+    mat16 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    print(mat16[:n_print, :, :])
