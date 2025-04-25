@@ -78,6 +78,37 @@ void tbm_sprint16(
     }
 }
 
+uint64_t tbm_transpose64(uint64_t in8x8)
+{
+    // input is 8x8 bit matrix with rows 8 rows: 0x0706050403020100
+    // 1st bit in rows is LSB, thus reversed compared to matrix notation
+    uint64_t ur_mask8x8 = 0x00000000f0f0f0f0 ; // up right 4x4 bits
+    // uint64_t = dl_mask8x8 = 0x0f0f0f0f00000000; // down left 4x4 bits
+    // dl_mask8x8 == ur_mask8x8 << (32-4)
+    uint64_t xor = in8x8 ^ (in8x8 >> 28);
+    xor &= ur_mask8x8;
+    in8x8 ^= xor;
+    xor <<= 28;
+    in8x8 ^= xor;
+    uint64_t ur_mask4x4 = 0x0000cccc0000cccc ; // 4 up right 2x2 bits
+    // uint64_t = dl_mask4x4 = 0x3333000033330000; // 4 down left 2x2 bits
+    // dl_mask8x8 == ur_mask8x8 << (16-2)
+    xor = in8x8 ^ (in8x8 >> 14);
+    xor &= ur_mask4x4;
+    in8x8 ^= xor;
+    xor <<= 14;
+    in8x8 ^= xor;
+    uint64_t ur_mask2x2 = 0x00aa00aa00aa00aa ; // 16 up right 1x1 bits
+    // uint64_t = dl_mask4x4 = 0x5500550055005500; // 16 down left 1x1 bits
+    // dl_mask8x8 == ur_mask8x8 << (8-1)
+    xor = in8x8 ^ (in8x8 >> 7);
+    xor &= ur_mask2x2;
+    in8x8 ^= xor;
+    xor <<= 7;
+    in8x8 ^= xor;
+    return in8x8;
+}
+
 void inline transpose8x8_int16(
     __m256i hgfedcba4_hgfedcba0, __m256i hgfedcba5_hgfedcba1,
     __m256i hgfedcba6_hgfedcba2, __m256i hgfedcba7_hgfedcba3,

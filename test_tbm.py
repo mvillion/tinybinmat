@@ -9,7 +9,7 @@ Usage:
 Options:
     -h --help             show this screen
     --dummy-exit          exit for debugger
-    --n-run=<n>           total number of runs [default: 2]
+    --n-run=<n>           total number of runs [default: 10]
     --n-run-step=<n>      sub-step run (for L3 and L2 cache)
 """
 import tinybinmat
@@ -33,22 +33,28 @@ if __name__ == "__main__":
     n_bit = 6
     mat = np.random.randint(0, 2**n_bit-1, (n_run, 8), dtype=np.uint8)
     mat[:, n_bit:] = 0
-    tinybinmat.print(mat, n_bit, " x")
 
-    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    n_print = 2
+    mat_print = mat[:n_print, :]
+    tinybinmat.print(mat_print, n_bit, " x")
+
+    mat8 = tinybinmat.sprint(mat_print, n_bit, np.arange(2, dtype=np.uint8))
     print(mat8)
 
-    mats = tinybinmat.sprint(mat, n_bit, np.frombuffer(b" x", np.uint8))
+    mats = tinybinmat.sprint(mat_print, n_bit, np.frombuffer(b" x", np.uint8))
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
     print(mats)
 
     transpose8 = tinybinmat.transpose(mat, n_bit)
-    tinybinmat.print(transpose8, n_bit, " x")
+    mat8t = tinybinmat.sprint(transpose8, n_bit, np.arange(2, dtype=np.uint8))
+    ok = np.array_equal(mat8.transpose(0, 2, 1), mat8t)
+    print("transpose8 is %sok" % ["not ", ""][ok])
 
     n_bit = 10
     mat = np.random.randint(0, 2**n_bit-1, (n_run, 16), dtype=np.uint16)
     mat[:, n_bit:] = 0
-    tinybinmat.print(mat, n_bit, " x")
+    mat_print = mat[:n_print, :]
+    tinybinmat.print(mat_print, n_bit, " x")
 
-    mat16 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    mat16 = tinybinmat.sprint(mat_print, n_bit, np.arange(2, dtype=np.uint8))
     print(mat16)

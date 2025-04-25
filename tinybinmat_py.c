@@ -144,7 +144,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
         return failure(
             PyExc_RuntimeError,
             "n_bit shall be inferior to the last dimension");
-    npy_intp n_mat = PyArray_SIZE(arr_in)/n_bit_raw;
+    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit_raw);
 
     PyObject *arr_out = PyArray_NewLikeArray(arr_in, NPY_ANYORDER, NULL, 0);
     uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
@@ -162,7 +162,10 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
     int py_type = PyArray_TYPE(arr_in);
     if (py_type == NPY_UINT8)
     {
-        memcpy(out, PyArray_DATA(arr_in), n_mat*n_bit_raw*sizeof(uint8_t));
+        uint64_t *in8x8 = (uint64_t *)PyArray_DATA(arr_in);
+        uint64_t *out8x8 = (uint64_t *)out;
+        for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+            out8x8[i_mat] = tbm_transpose64(in8x8[i_mat]);
     }
     else if (py_type == NPY_UINT16)
     {
