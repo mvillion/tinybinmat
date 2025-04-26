@@ -31,4 +31,7 @@ extern void tbm_transpose8x8(uint64_t *in8x8, uint64_t n_mat, uint64_t *out8x8);
 extern void tbm_transpose16x16(
     uint64_t *in2x16, uint64_t n_mat, uint64_t *out2x16);
 
+void tbm_mult_t8x8(
+    uint64_t *in8x8, uint64_t *tb8x8, uint64_t n_mat, uint64_t *out8x8);
+    
 #endif

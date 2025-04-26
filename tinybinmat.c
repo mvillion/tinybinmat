@@ -283,3 +283,40 @@ void tbm_transpose16x16(uint64_t *in2x16, uint64_t n_mat, uint64_t *out2x16)
     }
 }
 #pragma GCC pop_options //-----------------------------------------------------
+
+uint64_t inline tbm_mult8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
+{
+    uint64_t out = 0;
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        uint8_t row_b = tb8x8 & 0xff;
+        tb8x8 >>= 8;
+        uint64_t repeat = 0x0101010101010101*row_b;
+        uint64_t prod = a8x8 & repeat;
+        prod ^= prod << 4;
+        prod ^= prod << 2;
+        prod ^= prod << 1;
+        prod &= 0x8080808080808080;
+        out >>= 1;
+        out |= prod;
+    }
+    return out;
+}
+
+void tbm_mult_t8x8(
+    uint64_t *in8x8, uint64_t *tb8x8, uint64_t n_mat, uint64_t *out8x8)
+{
+    uint64_t i_avx2 = 0;
+#if defined(USE_AVX2) && 0
+    i_avx2 = n_mat/4*4;
+    for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
+    {
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in8x8+i_mat));
+        __m256i out8x8_4 = tbm_transpose8x8_m256i(in8x8_4);
+        _mm256_storeu_si256((__m256i *)(out8x8+i_mat), out8x8_4);
+    }
+#endif
+    for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
+        out8x8[i_mat] = tbm_mult8x8_uint64(in8x8[i_mat], tb8x8[i_mat]);
+}
+
