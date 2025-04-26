@@ -303,7 +303,7 @@ uint64_t inline tbm_mult8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
     return out;
 }
 
-uint64_t inline tbm_mult8x8_n256i(uint64_t a8x8, uint64_t tb8x8)
+uint64_t inline tbm_mult8x8_m256i(uint64_t a8x8, uint64_t tb8x8)
 {
     // note: this code output is transposed, thus input were swapped...
     __m256i a8x8_4 = _mm256_set1_epi64x(tb8x8);
@@ -334,7 +334,7 @@ void tbm_mult_t8x8(
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
 #if defined(USE_AVX2)
-        out8x8[i_mat] = tbm_mult8x8_n256i(in8x8[i_mat], tb8x8[i_mat]);
+        out8x8[i_mat] = tbm_mult8x8_m256i(in8x8[i_mat], tb8x8[i_mat]);
 #else
         out8x8[i_mat] = tbm_mult8x8_uint64(in8x8[i_mat], tb8x8[i_mat]);
 #endif
