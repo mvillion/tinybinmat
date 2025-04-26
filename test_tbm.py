@@ -45,8 +45,8 @@ if __name__ == "__main__":
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
     print(mats)
 
-    transpose8 = tinybinmat.transpose(mat, n_bit)
-    mat8t = tinybinmat.sprint(transpose8, n_bit, np.arange(2, dtype=np.uint8))
+    mat8t = tinybinmat.transpose(mat, n_bit)
+    mat8t = tinybinmat.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
     ok = np.array_equal(mat8.transpose(0, 2, 1), mat8t)
     print("transpose8 is %sok" % ["not ", ""][ok])
 
@@ -58,3 +58,8 @@ if __name__ == "__main__":
 
     mat16 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
     print(mat16[:n_print, :, :])
+
+    mat16t = tinybinmat.transpose(mat, n_bit)
+    mat16t = tinybinmat.sprint(mat16t, n_bit, np.arange(2, dtype=np.uint8))
+    ok = np.array_equal(mat16.transpose(0, 2, 1), mat16t)
+    print("transpose16 is %sok" % ["not ", ""][ok])

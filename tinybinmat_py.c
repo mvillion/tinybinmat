@@ -146,7 +146,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
     uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit_raw);
 
     PyObject *arr_out = PyArray_NewLikeArray(arr_in, NPY_ANYORDER, NULL, 0);
-    uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
+    uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
 
     // ensure the input array is contiguous.
     // PyArray_GETCONTIGUOUS will increase the reference count.
@@ -158,16 +158,15 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
             PyExc_RuntimeError,
             "last dimension shall be equal to the number of bits of the type");
 
+    uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
     int py_type = PyArray_TYPE(arr_in);
     if (py_type == NPY_UINT8)
     {
-        uint64_t *in8x8 = (uint64_t *)PyArray_DATA(arr_in);
-        uint64_t *out8x8 = (uint64_t *)out;
-        tbm_transpose64(in8x8, n_mat, out8x8);
+        tbm_transpose8x8(in, n_mat, out);
     }
     else if (py_type == NPY_UINT16)
     {
-        memcpy(out, PyArray_DATA(arr_in), n_mat*n_bit_raw*sizeof(uint16_t));
+        tbm_transpose16x16(in, n_mat, out);
     }
 
     // decrease the reference count
