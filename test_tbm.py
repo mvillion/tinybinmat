@@ -55,7 +55,7 @@ def test_mult_t(mat, matb, n_bit):
     duration = time()-t0
 
     prod = tinybinmat.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
-    ok = np.array_equal(ref, prod.transpose(0, 2, 1))
+    ok = np.array_equal(ref, prod)
     if ok:
         print("mult_t%d is ok" % (mat.itemsize*8))
     else:

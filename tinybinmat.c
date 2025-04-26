@@ -305,8 +305,9 @@ uint64_t inline tbm_mult8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
 
 uint64_t inline tbm_mult8x8_n256i(uint64_t a8x8, uint64_t tb8x8)
 {
-    __m256i a8x8_4 = _mm256_set1_epi64x(a8x8);
-    __m256i row_b_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, tb8x8));
+    // note: this code output is transposed, thus input were swapped...
+    __m256i a8x8_4 = _mm256_set1_epi64x(tb8x8);
+    __m256i row_b_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, a8x8));
     __m128i mask = _mm_set_epi8(8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
     __m256i repeat_mask = _mm256_set_m128i(mask, mask);
 
@@ -317,7 +318,7 @@ uint64_t inline tbm_mult8x8_n256i(uint64_t a8x8, uint64_t tb8x8)
     prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 1));
     uint64_t out = _mm256_movemask_epi8(prod_4);
     
-    row_b_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, tb8x8 >> 32));
+    row_b_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, a8x8 >> 32));
     repeat_4 = _mm256_shuffle_epi8(row_b_4, repeat_mask);
     prod_4 = _mm256_and_si256(a8x8_4, repeat_4);
     prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 4));
