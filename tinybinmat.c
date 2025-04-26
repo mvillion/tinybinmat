@@ -303,20 +303,40 @@ uint64_t inline tbm_mult8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
     return out;
 }
 
+uint64_t inline tbm_mult8x8_n256i(uint64_t a8x8, uint64_t tb8x8)
+{
+    __m256i a8x8_4 = _mm256_set1_epi64x(a8x8);
+    __m256i row_b_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, tb8x8));
+    __m128i mask = _mm_set_epi8(8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
+    __m256i repeat_mask = _mm256_set_m128i(mask, mask);
+
+    __m256i repeat_4 = _mm256_shuffle_epi8(row_b_4, repeat_mask);
+    __m256i prod_4 = _mm256_and_si256(a8x8_4, repeat_4);
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 4));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 2));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 1));
+    uint64_t out = _mm256_movemask_epi8(prod_4);
+    
+    row_b_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, tb8x8 >> 32));
+    repeat_4 = _mm256_shuffle_epi8(row_b_4, repeat_mask);
+    prod_4 = _mm256_and_si256(a8x8_4, repeat_4);
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 4));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 2));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 1));
+    out |= ((uint64_t)_mm256_movemask_epi8(prod_4)) << 32;
+    return out;
+}
+
 void tbm_mult_t8x8(
     uint64_t *in8x8, uint64_t *tb8x8, uint64_t n_mat, uint64_t *out8x8)
 {
-    uint64_t i_avx2 = 0;
-#if defined(USE_AVX2) && 0
-    i_avx2 = n_mat/4*4;
-    for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in8x8+i_mat));
-        __m256i out8x8_4 = tbm_transpose8x8_m256i(in8x8_4);
-        _mm256_storeu_si256((__m256i *)(out8x8+i_mat), out8x8_4);
-    }
-#endif
-    for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
+#if defined(USE_AVX2)
+        out8x8[i_mat] = tbm_mult8x8_n256i(in8x8[i_mat], tb8x8[i_mat]);
+#else
         out8x8[i_mat] = tbm_mult8x8_uint64(in8x8[i_mat], tb8x8[i_mat]);
+#endif
+    }
 }
 
