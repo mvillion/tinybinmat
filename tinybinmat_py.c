@@ -1,6 +1,5 @@
+#include "tinybinmat.h"
 #include "tinybinmat_utils.h"
-
-#include "tinybinmat.c"
 
 //______________________________________________________________________________
 static PyObject* tbm_print(PyObject *self, PyObject *arg)
