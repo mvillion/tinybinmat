@@ -143,25 +143,6 @@ __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 }
 #endif
 
-#pragma GCC push_options //----------------------------------------------------
-#pragma GCC optimize("no-tree-vectorize")
-void tbm_transpose8x8(uint64_t *in8x8, uint64_t n_mat, uint64_t *out8x8)
-{
-    uint64_t i_avx2 = 0;
-#if defined(USE_AVX2)
-    i_avx2 = n_mat/4*4;
-    for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
-    {
-        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in8x8+i_mat));
-        __m256i out8x8_4 = tbm_transpose8x8_m256i(in8x8_4);
-        _mm256_storeu_si256((__m256i *)(out8x8+i_mat), out8x8_4);
-    }
-#endif
-    for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
-        out8x8[i_mat] = tbm_transpose8x8_uint64(in8x8[i_mat]);
-}
-#pragma GCC pop_options //-----------------------------------------------------
-
 void inline tbm_transpose16x16_uint64(
     uint64_t in03x16, uint64_t in47x16, uint64_t in8bx16, uint64_t incfx16,
     uint64_t *out03x16, uint64_t *out47x16, uint64_t *out8bx16, 
@@ -223,21 +204,82 @@ void inline tbm_transpose16x16_uint64(
     *outcfx16 = incfx16;
 }
 
+__m256i inline tbm_transpose16x16_m256i(__m256i in16x16)
+{
+    __m256i ur_mask8x8 = _mm256_set_epi64x(
+        0, 0, 0xff00ff00ff00ff00, 0xff00ff00ff00ff00);
+    // we want to shift right in16x16 by 120
+    // we first shift right by 128, then shift left by 8
+    __m256i roll128 = _mm256_permute2x128_si256(in16x16, in16x16, 0x01);
+    __m256i xor = _mm256_xor_si256(in16x16, _mm256_bslli_epi128(roll128, 1));
+    xor = _mm256_and_si256(xor, ur_mask8x8);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    // we want to shift left xor by 120, xor is all in lower 128 bits
+    // we first shift left by 128, then shift right by 8
+    roll128 = _mm256_permute2x128_si256(xor, xor, 0x01);
+    xor = _mm256_bsrli_epi128(roll128, 1);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    __m256i ur_mask4x4 = _mm256_set_epi64x(
+        0, 0xf0f0f0f0f0f0f0f0, 0, 0xf0f0f0f0f0f0f0f0);
+    // we want to shift right in16x16 by 60 inside 128-bit lanes
+    // we first shift right by 8*8, then shift left by 4
+    __m256i shift64 = _mm256_bsrli_epi128(in16x16, 8);
+    xor = _mm256_xor_si256(in16x16, _mm256_slli_epi64(shift64, 4));
+    xor = _mm256_and_si256(xor, ur_mask4x4);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    // we want to shift left by 60 inside 128-bit lanes
+    // we first shift left by 8*8, then shift right by 4
+    xor = _mm256_bslli_epi128(xor, 8);
+    xor = _mm256_srli_epi64(xor, 4);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    __m256i ur_mask2x2 = _mm256_set1_epi64x(0x00000000cccccccc);
+    xor = _mm256_xor_si256(in16x16, _mm256_srli_epi64(in16x16, 30));
+    xor = _mm256_and_si256(xor, ur_mask2x2);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    xor = _mm256_slli_epi64(xor, 30);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    __m256i ur_mask1x1 = _mm256_set1_epi64x(0x0000aaaa0000aaaa);
+    xor = _mm256_xor_si256(in16x16, _mm256_srli_epi64(in16x16, 15));
+    xor = _mm256_and_si256(xor, ur_mask1x1);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    xor = _mm256_slli_epi64(xor, 15);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    return in16x16;
+}
+
+#pragma GCC push_options //----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
+void tbm_transpose8x8(uint64_t *in8x8, uint64_t n_mat, uint64_t *out8x8)
+{
+    uint64_t i_avx2 = 0;
+#if defined(USE_AVX2)
+    i_avx2 = n_mat/4*4;
+    for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
+    {
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in8x8+i_mat));
+        __m256i out8x8_4 = tbm_transpose8x8_m256i(in8x8_4);
+        _mm256_storeu_si256((__m256i *)(out8x8+i_mat), out8x8_4);
+    }
+#endif
+    for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
+        out8x8[i_mat] = tbm_transpose8x8_uint64(in8x8[i_mat]);
+}
 
 void tbm_transpose16x16(uint64_t *in2x16, uint64_t n_mat, uint64_t *out2x16)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if 0
-        __m256i in16x16 = _mm256_loadu_si256((__m256i *)(in2x16+i_mat*4));
-        __m256i out16x16 = tbm_transpose8x8_m256i(in16x16);
-        _mm256_storeu_si256((__m256i *)(out2x16+i_mat*4), out16x16);
+#if defined(USE_AVX2)
+        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in2x16);
+        __m256i out16x16 = tbm_transpose16x16_m256i(in16x16);
+        _mm256_storeu_si256((__m256i *)out2x16, out16x16);
 #else
         tbm_transpose16x16_uint64(
             in2x16[0], in2x16[1], in2x16[2], in2x16[3],
             out2x16+0, out2x16+1, out2x16+2, out2x16+3);
+#endif
         in2x16 += 4;
         out2x16 += 4;
-#endif
     }
 }
+#pragma GCC pop_options //-----------------------------------------------------
