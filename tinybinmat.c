@@ -117,6 +117,8 @@ void print_avx2_uint64(__m256i reg)
     printf("%016lx\n", ptr[3]);
 }
 
+#define USE_AVX2
+#if defined(USE_AVX2)
 __m256i inline tbm_transpose64_m256i(__m256i in8x8_4)
 {
     __m256i ur_mask8x8 = _mm256_set1_epi64x(0x00000000f0f0f0f0);
@@ -139,16 +141,24 @@ __m256i inline tbm_transpose64_m256i(__m256i in8x8_4)
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
     return in8x8_4;
 }
+#endif
 
+#pragma GCC push_options //----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
 void tbm_transpose64(uint64_t *in8x8, uint64_t n_mat, uint64_t *out8x8)
 {
-    for (uint64_t i_mat = 0; i_mat < n_mat/4*4; i_mat += 4)
+    uint64_t i_avx2 = 0;
+#if defined(USE_AVX2)
+    i_avx2 = n_mat/4*4;
+    for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
     {
         __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in8x8+i_mat));
         __m256i out8x8_4 = tbm_transpose64_m256i(in8x8_4);
         _mm256_storeu_si256((__m256i *)(out8x8+i_mat), out8x8_4);
     }
-    for (uint64_t i_mat = n_mat/4*4; i_mat < n_mat; i_mat++)
+#endif
+    for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
         out8x8[i_mat] = tbm_transpose64_uint64(in8x8[i_mat]);
-}
+    }
+#pragma GCC pop_options //-----------------------------------------------------
 
