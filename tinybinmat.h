@@ -22,6 +22,9 @@ extern void tbm_sprint8(
     uint8_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01,
     uint8_t *out);
 
+extern void tbm_sprint8_avx2(
+    uint8_t *mat_list, uint64_t n_mat, char *str01, uint8_t *out);
+
 extern void tbm_sprint16(
     uint16_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01,
     uint8_t *out);

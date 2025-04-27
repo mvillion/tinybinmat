@@ -19,8 +19,20 @@ import sys
 from time import time
 
 
+def test_ok(ok, test_str):
+    if ok:
+        print("%s is ok" % test_str)
+    else:
+        raise RuntimeError("error for %s" % test_str)
+
+
 def test_transpose(mat, n_bit):
     mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    if n_bit == 8:
+        special = tinybinmat.sprint(
+            mat, n_bit, np.array([0, 255], dtype=np.uint8))
+        ok = np.array_equal(mat8, special >> 7)
+        test_ok(ok, "special sprint%d" % (mat.itemsize*8))
 
     t0 = time()
     ref = np.ascontiguousarray(mat8.transpose(0, 2, 1))
@@ -31,11 +43,7 @@ def test_transpose(mat, n_bit):
     duration = time()-t0
 
     mat8t = tinybinmat.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
-    ok = np.array_equal(ref, mat8t)
-    if ok:
-        print("transpose%d is ok" % (mat.itemsize*8))
-    else:
-        raise RuntimeError("error for transpose%d" % (mat.itemsize*8))
+    test_ok(np.array_equal(ref, mat8t), "transpose%d" % (mat.itemsize*8))
     print("duration vs ref: %f" % (duration/ref_duration))
 
     return mat8
@@ -55,11 +63,7 @@ def test_mult_t(mat, matb, n_bit):
     duration = time()-t0
 
     prod = tinybinmat.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
-    ok = np.array_equal(ref, prod)
-    if ok:
-        print("mult_t%d is ok" % (mat.itemsize*8))
-    else:
-        raise RuntimeError("error for mult_t%d" % (mat.itemsize*8))
+    test_ok(np.array_equal(ref, prod), "mult_t%d" % (mat.itemsize*8))
     print("duration vs ref: %f" % (duration/ref_duration))
 
     return mat8
@@ -79,7 +83,7 @@ if __name__ == "__main__":
     except TypeError:
         n_run_step = n_run
 
-    n_bit = 6
+    n_bit = 8
     mat = np.random.randint(0, 2**n_bit-1, (n_run, 8), dtype=np.uint8)
     mat[:, n_bit:] = 0
     mat2 = np.random.randint(0, 2**n_bit-1, (n_run, 8), dtype=np.uint8)

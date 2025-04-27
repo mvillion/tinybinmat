@@ -1,5 +1,26 @@
 #include "tinybinmat.h"
 
+void print_avx2_uint64(__m256i reg)
+{
+    uint64_t *ptr = (uint64_t *)&reg;
+    for (uint8_t k = 0; k < 3; k++)
+        printf("%016lx ", ptr[k]);
+    printf("%016lx\n", ptr[3]);
+}
+
+__m256i _mm256_movm_epi8_avx2(const uint32_t mask) 
+{
+    __m256i vmask = _mm256_set1_epi32(mask);
+    const __m256i shuffle = _mm256_set_epi64x(
+        0x0303030303030303, 0x0202020202020202,
+        0x0101010101010101, 0x0000000000000000);
+        vmask = _mm256_shuffle_epi8(vmask, shuffle);
+    // "%016x" % (0x7fbfdfeff7fbfdfe ^ ((2 << 64)-1)) -> '18040201008040201'
+    const __m256i bit_mask = _mm256_set1_epi64x(0x7fbfdfeff7fbfdfe);
+    vmask = _mm256_or_si256(vmask, bit_mask);
+    return _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
+}
+
 void tbm_print8(
     uint8_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01)
 {
@@ -59,6 +80,21 @@ void tbm_sprint8(
     }
 }
 
+void tbm_sprint8_avx2(
+    uint8_t *mat_list, uint64_t n_mat, char *str01, uint8_t *out)
+{
+    uint64_t *mat_list64 = (uint64_t *)mat_list;
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        __m256i mask32 = _mm256_movm_epi8_avx2(mat_list64[i_mat] & 0xffffffff);
+        _mm256_storeu_si256((__m256i *)out, mask32);
+        out += 8*4;
+        mask32 = _mm256_movm_epi8_avx2(mat_list64[i_mat] >> 32);
+        _mm256_storeu_si256((__m256i *)out, mask32);
+        out += 8*4;
+    }
+}
+
 void tbm_sprint16(
     uint16_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01,
     uint8_t *out)
@@ -107,14 +143,6 @@ uint64_t inline tbm_transpose8x8_uint64(uint64_t in8x8)
     xor <<= 7;
     in8x8 ^= xor;
     return in8x8;
-}
-
-void print_avx2_uint64(__m256i reg)
-{
-    uint64_t *ptr = (uint64_t *)&reg;
-    for (uint8_t k = 0; k < 3; k++)
-        printf("%016lx ", ptr[k]);
-    printf("%016lx\n", ptr[3]);
 }
 
 #define USE_AVX2

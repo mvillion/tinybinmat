@@ -131,6 +131,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg)
         return failure(
             PyExc_RuntimeError, "3rd arg shall have at least 2 characters");
     char *str01 = (char *)PyArray_DATA(arr_str01);
+    bool special = (str01[0] == 0) && (str01[1] == -1);
 
     // create output dimensions
     int n_dim = PyArray_NDIM(arr_in);
@@ -164,7 +165,15 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg)
     int py_type = PyArray_TYPE(arr_in);
     if (py_type == NPY_UINT8)
     {
-        tbm_sprint8((uint8_t *)PyArray_DATA(arr_in), n_mat, n_bit, str01, out);
+        if (special)
+        {
+            printf("use special avx2 code!\n");
+            tbm_sprint8_avx2(
+                (uint8_t *)PyArray_DATA(arr_in), n_mat, str01, out);
+        }
+        else
+            tbm_sprint8(
+                (uint8_t *)PyArray_DATA(arr_in), n_mat, n_bit, str01, out);
     }
     else if (py_type == NPY_UINT16)
     {
