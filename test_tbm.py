@@ -102,11 +102,15 @@ if __name__ == "__main__":
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
     print(mats)
 
-    n_bit = 10
-    mat = np.random.randint(0, 2**n_bit-1, (n_run, 16), dtype=np.uint16)
-    mat[:, n_bit:] = 0
-    mat_print = mat[:n_print, :]
-    tinybinmat.print(mat_print, n_bit, " x")
+    for n_bit in [10, 20]:
+        n_bit_ceil2 = 2**int(np.ceil(np.log2(n_bit)))
+        print("use uint%d for %d" % (n_bit_ceil2, n_bit))
+        dtype = np.dtype("uint%d" % n_bit_ceil2)
+        mat = np.random.randint(
+            0, 2**n_bit-1, (n_run, n_bit_ceil2), dtype=dtype)
+        mat[:, n_bit:] = 0
+        mat_print = mat[:n_print, :]
+        tinybinmat.print(mat_print, n_bit, " x")
 
-    mat16 = test_transpose(mat, n_bit)
-    print(mat16[:n_print, :, :])
+        mat16 = test_transpose(mat, n_bit)
+        print(mat16[:n_print, :, :])

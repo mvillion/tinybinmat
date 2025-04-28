@@ -14,7 +14,7 @@ __m256i _mm256_movm_epi8_avx2(const uint32_t mask)
     const __m256i shuffle = _mm256_set_epi64x(
         0x0303030303030303, 0x0202020202020202,
         0x0101010101010101, 0x0000000000000000);
-        vmask = _mm256_shuffle_epi8(vmask, shuffle);
+    vmask = _mm256_shuffle_epi8(vmask, shuffle);
     // "%016x" % (0x7fbfdfeff7fbfdfe ^ ((2 << 64)-1)) -> '18040201008040201'
     const __m256i bit_mask = _mm256_set1_epi64x(0x7fbfdfeff7fbfdfe);
     vmask = _mm256_or_si256(vmask, bit_mask);
@@ -114,6 +114,25 @@ void tbm_sprint16(
     }
 }
 
+void tbm_sprint32(
+    uint32_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01,
+    uint8_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        for (uint8_t i_row = 0; i_row < n_bit; i_row++)
+        {
+            uint32_t row = mat_list[i_row];
+            for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
+            {
+                *out++ = str01[row & 1];
+                row >>= 1;
+            }
+        }
+        mat_list += 8*sizeof(uint32_t);
+    }
+}
+
 uint64_t inline tbm_transpose8x8_uint64(uint64_t in8x8)
 {
     // input is 8x8 bit matrix with 8 rows: 0x0706050403020100
@@ -176,7 +195,7 @@ void inline tbm_transpose16x16_uint64(
     uint64_t *out03x16, uint64_t *out47x16, uint64_t *out8bx16, 
     uint64_t *outcfx16)
 {
-    // inputs are 2x16 bit matrix with 2 rows: 0x00000001_00000000
+    // inputs are 4x16 bit matrix with 4 rows: 0x00030002_00010000
     // 1st bit in rows is LSB, thus reversed compared to matrix notation
     uint64_t ur_mask4x8 = 0xff00ff00ff00ff00; // up right 4x8 bits
     // uint64_t = dl_mask4x8 = 0x00ff00ff00ff00ff; // down left 4x8 bits
@@ -230,6 +249,73 @@ void inline tbm_transpose16x16_uint64(
     *out47x16 = in47x16;
     *out8bx16 = in8bx16;
     *outcfx16 = incfx16;
+}
+
+
+void inline tbm_transpose32x32_uint64(uint64_t in_read[16], uint64_t in[16])
+{
+    for (uint8_t i_row = 0; i_row < 16; i_row++)
+        in[i_row] = in_read[i_row];
+    // inputs are 2x32 bit matrix with 2 rows: 0x00000001_00000000
+    // 1st bit in rows is LSB, thus reversed compared to matrix notation
+    uint64_t ur_mask2x16 = 0xffff0000ffff0000; // up right 2x16 bits
+    // uint64_t = dl_mask2x16 = 0x0000ffff0000ffff; // down left 2x16 bits
+    // dl_mask2x16 == ur_mask2x16 >> 16
+    uint64_t xor;
+    for (uint8_t i_row = 0; i_row < 8; i_row++)
+    {
+        xor = in[i_row] ^ (in[i_row+8] << 16);
+        xor &= ur_mask2x16;
+        in[i_row] ^= xor;
+        xor >>= 16;
+        in[i_row+8] ^= xor;
+    }
+    uint64_t ur_mask2x8 = 0xff00ff00ff00ff00; // 2 up right 2x8 bits
+    // uint64_t = dl_mask2x8 = 0x00ff00ff00ff00ff; // 2 down left 2x16 bits
+    // dl_mask2x8 == ur_mask2x8 >> 8
+    for (uint8_t i_block = 0; i_block < 2; i_block++)
+        for (uint8_t i_row = 0; i_row < 4; i_row++)
+        {
+            xor = in[i_block*8+i_row] ^ (in[i_block*8+i_row+4] << 8);
+            xor &= ur_mask2x8;
+            in[i_block*8+i_row] ^= xor;
+            xor >>= 8;
+            in[i_block*8+i_row+4] ^= xor;
+        }
+    uint64_t ur_mask2x4 = 0xf0f0f0f0f0f0f0f0; // 4 up right 2x4 bits
+    // uint64_t = dl_mask2x4 = 0x0f0f0f0f0f0f0f0f; // 4 down left 2x4 bits
+    // dl_mask2x4 == ur_mask2x4 >> 4
+    for (uint8_t i_block = 0; i_block < 4; i_block++)
+        for (uint8_t i_row = 0; i_row < 2; i_row++)
+        {
+            xor = in[i_block*4+i_row] ^ (in[i_block*4+i_row+2] << 4);
+            xor &= ur_mask2x4;
+            in[i_block*4+i_row] ^= xor;
+            xor >>= 4;
+            in[i_block*4+i_row+2] ^= xor;
+        }
+    uint64_t ur_mask2x2 = 0xcccccccccccccccc; // 8 up right 2x2 bits
+    // uint64_t = dl_mask2x2 = 0x3333333333333333; // 4 down left 2x2 bits
+    // dl_mask2x2 == ur_mask2x2 >> 2
+    for (uint8_t i_block = 0; i_block < 8; i_block++)
+        for (uint8_t i_row = 0; i_row < 1; i_row++)
+        {
+            xor = in[i_block*2+i_row] ^ (in[i_block*2+i_row+1] << 2);
+            xor &= ur_mask2x2;
+            in[i_block*2+i_row] ^= xor;
+            xor >>= 2;
+            in[i_block*2+i_row+1] ^= xor;
+        }
+    uint64_t ur_mask1x1 = 0x00000000aaaaaaaa; // 16 up right 1x1 bits
+    // uint64_t = dl_mask1x1 = 0x5555555500000000; // 16 down left 1x1 bits
+    // dl_mask1x1 == ur_mask1x1 << (32-1)
+    for (uint8_t i_row = 0; i_row < 16; i_row++)
+    {
+        xor = in[i_row] ^ (in[i_row] >> 31);
+        xor &= ur_mask1x1;
+        in[i_row] ^= xor; xor <<= 31; in[i_row] ^= xor;
+    }
+    return;
 }
 
 __m256i inline tbm_transpose16x16_m256i(__m256i in16x16)
@@ -293,26 +379,42 @@ void tbm_transpose8x8(uint64_t *in8x8, uint64_t n_mat, uint64_t *out8x8)
         out8x8[i_mat] = tbm_transpose8x8_uint64(in8x8[i_mat]);
 }
 
-void tbm_transpose16x16(uint64_t *in2x16, uint64_t n_mat, uint64_t *out2x16)
+void tbm_transpose16x16(uint64_t *in4x16, uint64_t n_mat, uint64_t *out4x16)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
 #if defined(USE_AVX2)
-        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in2x16);
+        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in4x16);
         __m256i out16x16 = tbm_transpose16x16_m256i(in16x16);
-        _mm256_storeu_si256((__m256i *)out2x16, out16x16);
+        _mm256_storeu_si256((__m256i *)out4x16, out16x16);
 #else
         tbm_transpose16x16_uint64(
-            in2x16[0], in2x16[1], in2x16[2], in2x16[3],
-            out2x16+0, out2x16+1, out2x16+2, out2x16+3);
+            in4x16[0], in4x16[1], in4x16[2], in4x16[3],
+            out4x16+0, out4x16+1, out4x16+2, out4x16+3);
 #endif
-        in2x16 += 4;
-        out2x16 += 4;
+        in4x16 += 4;
+        out4x16 += 4;
+    }
+}
+
+void tbm_transpose32x32(uint64_t *in2x32, uint64_t n_mat, uint64_t *out2x32)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+#if defined(USE_AVX2) && 0
+        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in2x32);
+        __m256i out16x16 = tbm_transpose16x16_m256i(in16x16);
+        _mm256_storeu_si256((__m256i *)out2x32, out16x16);
+#else
+        tbm_transpose32x32_uint64(in2x32, out2x32);
+#endif
+        in2x32 += 16;
+        out2x32 += 16;
     }
 }
 #pragma GCC pop_options //-----------------------------------------------------
 
-uint64_t inline tbm_mult8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
+uint64_t inline tbm_mult_t8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
 {
     uint64_t out = 0;
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
@@ -331,7 +433,7 @@ uint64_t inline tbm_mult8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
     return out;
 }
 
-uint64_t inline tbm_mult8x8_m256i(uint64_t a8x8, uint64_t tb8x8)
+uint64_t inline tbm_mult_t8x8_m256i(uint64_t a8x8, uint64_t tb8x8)
 {
     // note: this code output is transposed, thus input were swapped...
     __m256i a8x8_4 = _mm256_set1_epi64x(tb8x8);
@@ -363,9 +465,9 @@ void tbm_mult_t8x8(
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
 #if defined(USE_AVX2)
-        out8x8[i_mat] = tbm_mult8x8_m256i(in8x8[i_mat], tb8x8[i_mat]);
+        out8x8[i_mat] = tbm_mult_t8x8_m256i(in8x8[i_mat], tb8x8[i_mat]);
 #else
-        out8x8[i_mat] = tbm_mult8x8_uint64(in8x8[i_mat], tb8x8[i_mat]);
+        out8x8[i_mat] = tbm_mult_t8x8_uint64(in8x8[i_mat], tb8x8[i_mat]);
 #endif
     }
 }

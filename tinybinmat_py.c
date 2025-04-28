@@ -163,7 +163,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg)
             "last dimension shall be equal to the number of bits of the type");
 
     int py_type = PyArray_TYPE(arr_in);
-    if (py_type == NPY_UINT8)
+    if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {
         if (special)
         {
@@ -175,13 +175,20 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg)
             tbm_sprint8(
                 (uint8_t *)PyArray_DATA(arr_in), n_mat, n_bit, str01, out);
     }
-    else if (py_type == NPY_UINT16)
+    else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
     {
         tbm_sprint16(
             (uint16_t *)PyArray_DATA(arr_in), n_mat, n_bit, str01, out);
     }
+    else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
+    {
+        tbm_sprint32(
+            (uint32_t *)PyArray_DATA(arr_in), n_mat, n_bit, str01, out);
+    }
+    else
+        failure(PyExc_RuntimeError, "input type is not supported");
 
-    // decrease the reference count
+        // decrease the reference count
     Py_DECREF(arr_in);
     free(out_dim);
     return arr_out;
@@ -219,14 +226,20 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
 
     uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
     int py_type = PyArray_TYPE(arr_in);
-    if (py_type == NPY_UINT8)
+    if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {
         tbm_transpose8x8(in, n_mat, out);
     }
-    else if (py_type == NPY_UINT16)
+    else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
     {
         tbm_transpose16x16(in, n_mat, out);
     }
+    else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
+    {
+        tbm_transpose32x32(in, n_mat, out);
+    }
+    else
+        failure(PyExc_RuntimeError, "input type is not supported");
 
     // decrease the reference count
     Py_DECREF(arr_in);
