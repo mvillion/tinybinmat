@@ -164,8 +164,6 @@ uint64_t inline tbm_transpose8x8_uint64(uint64_t in8x8)
     return in8x8;
 }
 
-#define USE_AVX2
-#if defined(USE_AVX2)
 __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 {
     __m256i ur_mask4x4 = _mm256_set1_epi64x(0x00000000f0f0f0f0);
@@ -188,7 +186,6 @@ __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
     return in8x8_4;
 }
-#endif
 
 void inline tbm_transpose16x16_uint64(
     uint64_t in03x16, uint64_t in47x16, uint64_t in8bx16, uint64_t incfx16,
@@ -251,6 +248,49 @@ void inline tbm_transpose16x16_uint64(
     *outcfx16 = incfx16;
 }
 
+
+__m256i inline tbm_transpose16x16_m256i(__m256i in16x16)
+{
+    __m256i ur_mask8x8 = _mm256_set_epi64x(
+        0, 0, 0xff00ff00ff00ff00, 0xff00ff00ff00ff00);
+    // we want to shift right in16x16 by 120
+    // we first shift right by 128, then shift left by 8
+    __m256i roll128 = _mm256_permute2x128_si256(in16x16, in16x16, 0x01);
+    __m256i xor = _mm256_xor_si256(in16x16, _mm256_bslli_epi128(roll128, 1));
+    xor = _mm256_and_si256(xor, ur_mask8x8);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    // we want to shift left xor by 120, xor is all in lower 128 bits
+    // we first shift left by 128, then shift right by 8
+    roll128 = _mm256_permute2x128_si256(xor, xor, 0x01);
+    xor = _mm256_bsrli_epi128(roll128, 1);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    __m256i ur_mask4x4 = _mm256_set_epi64x(
+        0, 0xf0f0f0f0f0f0f0f0, 0, 0xf0f0f0f0f0f0f0f0);
+    // we want to shift right in16x16 by 60 inside 128-bit lanes
+    // we first shift right by 8*8, then shift left by 4
+    __m256i shift64 = _mm256_bsrli_epi128(in16x16, 8);
+    xor = _mm256_xor_si256(in16x16, _mm256_slli_epi64(shift64, 4));
+    xor = _mm256_and_si256(xor, ur_mask4x4);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    // we want to shift left by 60 inside 128-bit lanes
+    // we first shift left by 8*8, then shift right by 4
+    xor = _mm256_bslli_epi128(xor, 8);
+    xor = _mm256_srli_epi64(xor, 4);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    __m256i ur_mask2x2 = _mm256_set1_epi64x(0x00000000cccccccc);
+    xor = _mm256_xor_si256(in16x16, _mm256_srli_epi64(in16x16, 30));
+    xor = _mm256_and_si256(xor, ur_mask2x2);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    xor = _mm256_slli_epi64(xor, 30);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    __m256i ur_mask1x1 = _mm256_set1_epi64x(0x0000aaaa0000aaaa);
+    xor = _mm256_xor_si256(in16x16, _mm256_srli_epi64(in16x16, 15));
+    xor = _mm256_and_si256(xor, ur_mask1x1);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    xor = _mm256_slli_epi64(xor, 15);
+    in16x16 = _mm256_xor_si256(in16x16, xor);
+    return in16x16;
+}
 
 void inline tbm_transpose32x32_uint64(uint64_t in_read[16], uint64_t in[16])
 {
@@ -318,49 +358,78 @@ void inline tbm_transpose32x32_uint64(uint64_t in_read[16], uint64_t in[16])
     return;
 }
 
-__m256i inline tbm_transpose16x16_m256i(__m256i in16x16)
+void inline tbm_transpose32x32_m256i(__m256i in_read[4], __m256i in[4])
 {
-    __m256i ur_mask8x8 = _mm256_set_epi64x(
-        0, 0, 0xff00ff00ff00ff00, 0xff00ff00ff00ff00);
-    // we want to shift right in16x16 by 120
-    // we first shift right by 128, then shift left by 8
-    __m256i roll128 = _mm256_permute2x128_si256(in16x16, in16x16, 0x01);
-    __m256i xor = _mm256_xor_si256(in16x16, _mm256_bslli_epi128(roll128, 1));
-    xor = _mm256_and_si256(xor, ur_mask8x8);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
-    // we want to shift left xor by 120, xor is all in lower 128 bits
-    // we first shift left by 128, then shift right by 8
-    roll128 = _mm256_permute2x128_si256(xor, xor, 0x01);
-    xor = _mm256_bsrli_epi128(roll128, 1);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
+    for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+        in[i_8row] = in_read[i_8row];
+
+    __m256i ur_mask8x16 = _mm256_set1_epi64x(0xffff0000ffff0000);
+    __m256i xor;
+    for (uint8_t i_8row = 0; i_8row < 2; i_8row++)
+    {
+        xor = _mm256_xor_si256(
+            in[i_8row], _mm256_bslli_epi128(in[i_8row+2], 2));
+        xor = _mm256_and_si256(xor, ur_mask8x16);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+        xor = _mm256_bsrli_epi128(xor, 2);
+        in[i_8row+2] = _mm256_xor_si256(in[i_8row+2], xor);
+    }
+    __m256i ur_mask8x8 = _mm256_set1_epi64x(0xff00ff00ff00ff00);
+    for (uint8_t i_block = 0; i_block < 2; i_block++)
+    {
+        uint8_t i_8row = i_block*2;
+        xor = _mm256_xor_si256(
+            in[i_8row], _mm256_bslli_epi128(in[i_8row+1], 1));
+        xor = _mm256_and_si256(xor, ur_mask8x8);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+        xor = _mm256_bsrli_epi128(xor, 1);
+        in[i_8row+1] = _mm256_xor_si256(in[i_8row+1], xor);
+    }
     __m256i ur_mask4x4 = _mm256_set_epi64x(
-        0, 0xf0f0f0f0f0f0f0f0, 0, 0xf0f0f0f0f0f0f0f0);
-    // we want to shift right in16x16 by 60 inside 128-bit lanes
-    // we first shift right by 8*8, then shift left by 4
-    __m256i shift64 = _mm256_bsrli_epi128(in16x16, 8);
-    xor = _mm256_xor_si256(in16x16, _mm256_slli_epi64(shift64, 4));
-    xor = _mm256_and_si256(xor, ur_mask4x4);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
-    // we want to shift left by 60 inside 128-bit lanes
-    // we first shift left by 8*8, then shift right by 4
-    xor = _mm256_bslli_epi128(xor, 8);
-    xor = _mm256_srli_epi64(xor, 4);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
-    __m256i ur_mask2x2 = _mm256_set1_epi64x(0x00000000cccccccc);
-    xor = _mm256_xor_si256(in16x16, _mm256_srli_epi64(in16x16, 30));
-    xor = _mm256_and_si256(xor, ur_mask2x2);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
-    xor = _mm256_slli_epi64(xor, 30);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
-    __m256i ur_mask1x1 = _mm256_set1_epi64x(0x0000aaaa0000aaaa);
-    xor = _mm256_xor_si256(in16x16, _mm256_srli_epi64(in16x16, 15));
-    xor = _mm256_and_si256(xor, ur_mask1x1);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
-    xor = _mm256_slli_epi64(xor, 15);
-    in16x16 = _mm256_xor_si256(in16x16, xor);
-    return in16x16;
+        0, 0, 0xf0f0f0f0f0f0f0f0, 0xf0f0f0f0f0f0f0f0);
+    for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+    {
+        // we want to shift right ur_mask4x4 by 124
+        // we first shift right by 128, then shift left by 4
+        __m256i roll128 = _mm256_permute2x128_si256(
+            in[i_8row], in[i_8row], 0x01);
+        xor = _mm256_xor_si256(in[i_8row], _mm256_slli_epi64(roll128, 4));
+        xor = _mm256_and_si256(xor, ur_mask4x4);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+        // we want to shift left xor by 124, xor is all in lower 128 bits
+        // we first shift left by 128, then shift right by 4
+        roll128 = _mm256_permute2x128_si256(xor, xor, 0x01);
+        xor = _mm256_srli_epi64(roll128, 4);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+    }
+    __m256i ur_mask2x2 = _mm256_set_epi64x(
+        0, 0xcccccccccccccccc, 0, 0xcccccccccccccccc);
+    for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+    {
+        // we want to shift right in16x16 by 62 inside 128-bit lanes
+        // we first shift right by 8*8, then shift left by 2
+        __m256i shift64 = _mm256_bsrli_epi128(in[i_8row], 8);
+        xor = _mm256_xor_si256(in[i_8row], _mm256_slli_epi64(shift64, 2));
+        xor = _mm256_and_si256(xor, ur_mask2x2);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+        // we want to shift left xor by 62, xor is all in lower 128 bits
+        // we first shift left by 64, then shift right by 2
+        xor = _mm256_bslli_epi128(xor, 8);
+        xor = _mm256_srli_epi64(xor, 2);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+    }
+    __m256i ur_mask1x1 = _mm256_set1_epi64x(0x00000000aaaaaaaa);
+    for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+    {
+        xor = _mm256_xor_si256(in[i_8row], _mm256_srli_epi64(in[i_8row], 31));
+        xor = _mm256_and_si256(xor, ur_mask1x1);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+        xor = _mm256_slli_epi64(xor, 31);
+        in[i_8row] = _mm256_xor_si256(in[i_8row], xor);
+    }
 }
 
+#define USE_AVX2
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_transpose8x8(uint64_t *in8x8, uint64_t n_mat, uint64_t *out8x8)
@@ -401,10 +470,13 @@ void tbm_transpose32x32(uint64_t *in2x32, uint64_t n_mat, uint64_t *out2x32)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2) && 0
-        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in2x32);
-        __m256i out16x16 = tbm_transpose16x16_m256i(in16x16);
-        _mm256_storeu_si256((__m256i *)out2x32, out16x16);
+#if defined(USE_AVX2)
+        __m256i in8x32[4];
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+            in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in2x32)+i_8row);
+        tbm_transpose32x32_m256i(in8x32, in8x32);
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+            _mm256_storeu_si256(((__m256i *)out2x32)+i_8row, in8x32[i_8row]);
 #else
         tbm_transpose32x32_uint64(in2x32, out2x32);
 #endif
