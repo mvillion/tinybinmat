@@ -2,61 +2,6 @@
 #include "tinybinmat_utils.h"
 
 //______________________________________________________________________________
-static PyObject* tbm_mult_t(PyObject *self, PyObject *arg)
-{
-    PyArrayObject *arr_in; //!< 1st array of matrices to multiply
-    PyArrayObject *arr_tb; //!< 2nd array of matrices to multiply (transposed)
-
-    int ok = PyArg_ParseTuple(
-        arg, "O!O!", &PyArray_Type, &arr_in, &PyArray_Type, &arr_tb);
-    if (!ok)
-        return failure(PyExc_RuntimeError, "failed to parse parameters");
-    if (arr_in == NULL) return NULL;
-
-    int n_dim = PyArray_NDIM(arr_in);
-    if (n_dim < 1)
-        return failure(PyExc_RuntimeError, "input need at least 1 dimension");
-    npy_intp n_bit_raw = PyArray_DIM(arr_in, n_dim-1);
-
-    npy_intp size_type = PyArray_ITEMSIZE(arr_in);
-    if (n_bit_raw != 8*size_type)
-        return failure(
-            PyExc_RuntimeError,
-            "last dimension shall be equal to the number of bits of the type");
-
-    if (PyArray_NBYTES(arr_tb) != PyArray_NBYTES(arr_in))
-        return failure(
-            PyExc_RuntimeError, "two arrays shall have the same size");
-
-    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit_raw);
-
-    // create output dimensions
-    PyObject *arr_out = PyArray_NewLikeArray(arr_in, NPY_ANYORDER, NULL, 0);
-    uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
-
-    // ensure the input array is contiguous.
-    // PyArray_GETCONTIGUOUS will increase the reference count.
-    arr_in = PyArray_GETCONTIGUOUS(arr_in);
-    arr_tb = PyArray_GETCONTIGUOUS(arr_tb);
-
-    uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
-    uint64_t *tb = (uint64_t *)PyArray_DATA(arr_tb);
-    int py_type = PyArray_TYPE(arr_in);
-    if (py_type == NPY_UINT8)
-    {
-        tbm_mult_t8x8(in, tb, n_mat, out);
-    }
-    // else if (py_type == NPY_UINT16)
-    // {
-    //     tbm_transpose16x16(in, n_mat, out);
-    // }
-
-    // decrease the reference count
-    Py_DECREF(arr_tb);
-    Py_DECREF(arr_in);
-    return arr_out;
-}
-
 static PyObject* tbm_print(PyObject *self, PyObject *arg)
 {
     PyArrayObject *arr_in;
@@ -242,6 +187,67 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
         failure(PyExc_RuntimeError, "input type is not supported");
 
     // decrease the reference count
+    Py_DECREF(arr_in);
+    return arr_out;
+}
+
+static PyObject* tbm_mult_t(PyObject *self, PyObject *arg)
+{
+    PyArrayObject *arr_in; //!< 1st array of matrices to multiply
+    PyArrayObject *arr_tb; //!< 2nd array of matrices to multiply (transposed)
+
+    int ok = PyArg_ParseTuple(
+        arg, "O!O!", &PyArray_Type, &arr_in, &PyArray_Type, &arr_tb);
+    if (!ok)
+        return failure(PyExc_RuntimeError, "failed to parse parameters");
+    if (arr_in == NULL) return NULL;
+
+    int n_dim = PyArray_NDIM(arr_in);
+    if (n_dim < 1)
+        return failure(PyExc_RuntimeError, "input need at least 1 dimension");
+    npy_intp n_bit_raw = PyArray_DIM(arr_in, n_dim-1);
+
+    npy_intp size_type = PyArray_ITEMSIZE(arr_in);
+    if (n_bit_raw != 8*size_type)
+        return failure(
+            PyExc_RuntimeError,
+            "last dimension shall be equal to the number of bits of the type");
+
+    if (PyArray_NBYTES(arr_tb) != PyArray_NBYTES(arr_in))
+        return failure(
+            PyExc_RuntimeError, "two arrays shall have the same size");
+
+    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit_raw);
+
+    // create output dimensions
+    PyObject *arr_out = PyArray_NewLikeArray(arr_in, NPY_ANYORDER, NULL, 0);
+    uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
+
+    // ensure the input array is contiguous.
+    // PyArray_GETCONTIGUOUS will increase the reference count.
+    arr_in = PyArray_GETCONTIGUOUS(arr_in);
+    arr_tb = PyArray_GETCONTIGUOUS(arr_tb);
+
+    uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
+    uint64_t *tb = (uint64_t *)PyArray_DATA(arr_tb);
+    int py_type = PyArray_TYPE(arr_in);
+    if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
+    {
+        tbm_mult_t8x8(in, tb, n_mat, out);
+    }
+    else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
+    {
+        tbm_mult_t16x16(in, tb, n_mat, out);
+    }
+    // else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
+    // {
+    //     tbm_mult_t32x32(in, tb, n_mat, out);
+    // }
+    else
+        failure(PyExc_RuntimeError, "input type is not supported");
+
+    // decrease the reference count
+    Py_DECREF(arr_tb);
     Py_DECREF(arr_in);
     return arr_out;
 }

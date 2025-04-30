@@ -21,7 +21,7 @@ from time import time
 
 def test_ok(ok, test_str):
     if ok:
-        print("%s is ok" % test_str)
+        print("%20s is ok" % test_str, end="")
     else:
         raise RuntimeError("error for %s" % test_str)
 
@@ -33,6 +33,7 @@ def test_transpose(mat, n_bit):
             mat, n_bit, np.array([0, 255], dtype=np.uint8))
         ok = np.array_equal(mat8, special >> 7)
         test_ok(ok, "special sprint%d" % (mat.itemsize*8))
+        print("")
 
     t0 = time()
     ref = np.ascontiguousarray(mat8.transpose(0, 2, 1))
@@ -44,7 +45,7 @@ def test_transpose(mat, n_bit):
 
     mat8t = tinybinmat.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
     test_ok(np.array_equal(ref, mat8t), "transpose%d" % (mat.itemsize*8))
-    print("duration vs ref: %f" % (duration/ref_duration))
+    print(" (duration vs ref: %f)" % (duration/ref_duration))
 
     return mat8
 
@@ -64,7 +65,7 @@ def test_mult_t(mat, matb, n_bit):
 
     prod = tinybinmat.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
     test_ok(np.array_equal(ref, prod), "mult_t%d" % (mat.itemsize*8))
-    print("duration vs ref: %f" % (duration/ref_duration))
+    print(" (duration vs ref: %f)" % (duration/ref_duration))
 
     return mat8
 
@@ -86,31 +87,31 @@ if __name__ == "__main__":
     n_bit = 8
     mat = np.random.randint(0, 2**n_bit-1, (n_run, 8), dtype=np.uint8)
     mat[:, n_bit:] = 0
-    mat2 = np.random.randint(0, 2**n_bit-1, (n_run, 8), dtype=np.uint8)
-    mat2[:, n_bit:] = 0
 
     n_print = 2
     mat_print = mat[:n_print, :]
     tinybinmat.print(mat_print, n_bit, " x")
 
-    mat8 = test_transpose(mat, n_bit)
-    print(mat8[:n_print, :, :])
-
-    test_mult_t(mat, mat2, n_bit)
-
     mats = tinybinmat.sprint(mat_print, n_bit, np.frombuffer(b" x", np.uint8))
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
     print(mats)
 
-    for n_bit in [10, 20]:
+    for n_bit in [8, 10, 16, 20, 32]:
         n_bit_ceil2 = 2**int(np.ceil(np.log2(n_bit)))
         print("use uint%d for %d" % (n_bit_ceil2, n_bit))
         dtype = np.dtype("uint%d" % n_bit_ceil2)
         mat = np.random.randint(
             0, 2**n_bit-1, (n_run, n_bit_ceil2), dtype=dtype)
         mat[:, n_bit:] = 0
-        mat_print = mat[:n_print, :]
-        tinybinmat.print(mat_print, n_bit, " x")
+        if n_bit == 6:
+            mat_print = mat[:n_print, :]
+            tinybinmat.print(mat_print, n_bit, " x")
 
         mat16 = test_transpose(mat, n_bit)
-        print(mat16[:n_print, :, :])
+
+        mat2 = np.random.randint(
+            0, 2**n_bit-1, (n_run, n_bit_ceil2), dtype=dtype)
+        mat2[:, n_bit:] = 0
+
+        if n_bit <= 16:
+            test_mult_t(mat, mat2, n_bit)
