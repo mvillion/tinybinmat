@@ -363,8 +363,9 @@ void inline tbm_transpose32x32_m256i(__m256i in_read[4], __m256i in[4])
     for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
         in[i_8row] = in_read[i_8row];
 
-    __m256i ur_mask8x16 = _mm256_set1_epi64x(0xffff0000ffff0000);
     __m256i xor;
+#if 0
+    __m256i ur_mask8x16 = _mm256_set1_epi64x(0xffff0000ffff0000);
     for (uint8_t i_8row = 0; i_8row < 2; i_8row++)
     {
         xor = _mm256_xor_si256(
@@ -374,6 +375,17 @@ void inline tbm_transpose32x32_m256i(__m256i in_read[4], __m256i in[4])
         xor = _mm256_bsrli_epi128(xor, 2);
         in[i_8row+2] = _mm256_xor_si256(in[i_8row+2], xor);
     }
+#else
+    for (uint8_t i_8row = 0; i_8row < 2; i_8row++)
+    {
+        __m256i in0 = in[i_8row];
+        __m256i in1 = in[i_8row+2];
+        __m256i in0_sr16 = _mm256_srli_epi32(in0, 16);
+        __m256i in1_sl16 = _mm256_slli_epi32(in1, 16);
+        in[i_8row] = _mm256_blend_epi16(in0, in1_sl16, 0xaa);
+        in[i_8row+2] = _mm256_blend_epi16(in1, in0_sr16, 0x55);
+    }
+#endif
     __m256i ur_mask8x8 = _mm256_set1_epi64x(0xff00ff00ff00ff00);
     for (uint8_t i_block = 0; i_block < 2; i_block++)
     {
