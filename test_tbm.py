@@ -26,28 +26,11 @@ def test_ok(ok, test_str):
         raise RuntimeError("error for %s" % test_str)
 
 
-def test_transpose(mat, n_bit):
-    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
-    if n_bit == 8:
-        special = tinybinmat.sprint(
-            mat, n_bit, np.array([0, 255], dtype=np.uint8))
-        ok = np.array_equal(mat8, special >> 7)
-        test_ok(ok, "special sprint%d" % (mat.itemsize*8))
-        print("")
-
-    t0 = time()
-    ref = np.ascontiguousarray(mat8.transpose(0, 2, 1))
-    ref_duration = time()-t0
-
-    t0 = time()
-    mat8t = tinybinmat.transpose(mat)
-    duration = time()-t0
-
-    mat8t = tinybinmat.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
-    test_ok(np.array_equal(ref, mat8t), "transpose%d" % (mat.itemsize*8))
-    print(" (duration vs ref: %f)" % (duration/ref_duration))
-
-    return mat8
+def test_encode(mat, n_bit):
+    decode = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    encode = tinybinmat.encode(decode)
+    test_ok(np.array_equal(mat, encode), "encode%d" % (mat.itemsize*8))
+    print("")
 
 
 def test_mult_t(mat, matb, n_bit):
@@ -67,7 +50,21 @@ def test_mult_t(mat, matb, n_bit):
     test_ok(np.array_equal(ref, prod), "mult_t%d" % (mat.itemsize*8))
     print(" (duration vs ref: %f)" % (duration/ref_duration))
 
-    return mat8
+
+def test_transpose(mat, n_bit):
+    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+
+    t0 = time()
+    ref = np.ascontiguousarray(mat8.transpose(0, 2, 1))
+    ref_duration = time()-t0
+
+    t0 = time()
+    mat8t = tinybinmat.transpose(mat)
+    duration = time()-t0
+
+    mat8t = tinybinmat.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
+    test_ok(np.array_equal(ref, mat8t), "transpose%d" % (mat.itemsize*8))
+    print(" (duration vs ref: %f)" % (duration/ref_duration))
 
 
 if __name__ == "__main__":
@@ -107,10 +104,12 @@ if __name__ == "__main__":
             mat_print = mat[:n_print, :]
             tinybinmat.print(mat_print, n_bit, " x")
 
-        mat16 = test_transpose(mat, n_bit)
+        test_encode(mat, n_bit)
 
         mat2 = np.random.randint(
             0, 2**n_bit-1, (n_run, n_bit_ceil2), dtype=dtype)
         mat2[:, n_bit:] = 0
 
         test_mult_t(mat, mat2, n_bit)
+
+        test_transpose(mat, n_bit)

@@ -21,6 +21,69 @@ __m256i _mm256_movm_epi8_avx2(const uint32_t mask)
     return _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
 }
 
+void tbm_encode8(
+    uint8_t *in, uint64_t n_mat, uint8_t n_bit, uint8_t n_bit_raw, 
+    uint8_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        for (uint8_t i_bit_raw = 0; i_bit_raw < n_bit; i_bit_raw++)
+        {
+            uint8_t acc = 0;
+            for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
+            {
+                uint8_t bit = in[(i_mat*n_bit+i_bit_raw)*n_bit+i_bit];
+                acc |= (bit & 1) << i_bit;
+            }
+            out[i_mat*n_bit_raw+i_bit_raw] = acc;
+        }
+        for (uint8_t i_bit_raw = n_bit; i_bit_raw < n_bit_raw; i_bit_raw++)
+            out[i_mat*n_bit_raw+i_bit_raw] = 0;
+    }
+}
+
+void tbm_encode16(
+    uint8_t *in, uint64_t n_mat, uint8_t n_bit, uint8_t n_bit_raw, 
+    uint16_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        for (uint8_t i_bit_raw = 0; i_bit_raw < n_bit; i_bit_raw++)
+        {
+            uint16_t acc = 0;
+            for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
+            {
+                uint8_t bit = in[(i_mat*n_bit+i_bit_raw)*n_bit+i_bit];
+                acc |= (bit & 1) << i_bit;
+            }
+            out[i_mat*n_bit_raw+i_bit_raw] = acc;
+        }
+        for (uint8_t i_bit_raw = n_bit; i_bit_raw < n_bit_raw; i_bit_raw++)
+            out[i_mat*n_bit_raw+i_bit_raw] = 0;
+    }
+}
+
+void tbm_encode32(
+    uint8_t *in, uint64_t n_mat, uint8_t n_bit, uint8_t n_bit_raw, 
+    uint32_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        for (uint8_t i_bit_raw = 0; i_bit_raw < n_bit; i_bit_raw++)
+        {
+            uint32_t acc = 0;
+            for (uint8_t i_bit = 0; i_bit < n_bit; i_bit++)
+            {
+                uint8_t bit = in[(i_mat*n_bit+i_bit_raw)*n_bit+i_bit];
+                acc |= (bit & 1) << i_bit;
+            }
+            out[i_mat*n_bit_raw+i_bit_raw] = acc;
+        }
+        for (uint8_t i_bit_raw = n_bit; i_bit_raw < n_bit_raw; i_bit_raw++)
+            out[i_mat*n_bit_raw+i_bit_raw] = 0;
+    }
+}
+
 void tbm_print8(
     uint8_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01)
 {

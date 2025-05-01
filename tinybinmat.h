@@ -12,6 +12,18 @@
 #define __UNUSED__ __attribute__((unused))
 #endif
 
+extern void tbm_encode8(
+    uint8_t *in, uint64_t n_mat, uint8_t n_bit, uint8_t n_bit_raw, 
+    uint8_t *out);
+
+extern void tbm_encode16(
+    uint8_t *in, uint64_t n_mat, uint8_t n_bit, uint8_t n_bit_raw, 
+    uint16_t *out);
+
+extern void tbm_encode32(
+    uint8_t *in, uint64_t n_mat, uint8_t n_bit, uint8_t n_bit_raw, 
+    uint32_t *out);
+
 extern void tbm_print8(
     uint8_t *mat_list, uint64_t n_mat, uint8_t n_bit, char *str01);
 
