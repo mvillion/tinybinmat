@@ -48,4 +48,7 @@ void tbm_mult_t8x8(
 void tbm_mult_t16x16(
     uint64_t *in4x16, uint64_t *tb4x16, uint64_t n_mat, uint64_t *out4x16);
     
+void tbm_mult_t32x32(
+    uint64_t *in2x32, uint64_t *tb2x32, uint64_t n_mat, uint64_t *out2x32);
+    
 #endif

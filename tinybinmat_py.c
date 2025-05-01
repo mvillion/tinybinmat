@@ -239,10 +239,10 @@ static PyObject* tbm_mult_t(PyObject *self, PyObject *arg)
     {
         tbm_mult_t16x16(in, tb, n_mat, out);
     }
-    // else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
-    // {
-    //     tbm_mult_t32x32(in, tb, n_mat, out);
-    // }
+    else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
+    {
+        tbm_mult_t32x32(in, tb, n_mat, out);
+    }
     else
         failure(PyExc_RuntimeError, "input type is not supported");
 
