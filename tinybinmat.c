@@ -558,49 +558,176 @@ void inline tbm_mult_t16x16_uint64(
             a_4row[i_4col] = a4x16[i_4col];
         for (uint8_t i_bit = 0; i_bit < 4; i_bit++)
         {
-                uint64_t row_a = a_4row[0] & 0xffff;
-                a_4row[0] >>= 16;
-                uint64_t repeat = 0x0001000100010001*row_a;
-                uint64_t prod0 = tb_4col & repeat;
-                prod0 ^= prod0 >> 8;
-                prod0 &= 0x00ff00ff00ff00ff;
-                row_a = a_4row[2] & 0xffff;
-                a_4row[2] >>= 16;
-                repeat = 0x0001000100010001*row_a;
-                uint64_t prod2 = tb_4col & repeat;
-                prod2 ^= prod2 >> 8;
-                prod2 &= 0x00ff00ff00ff00ff;
-                uint64_t prod02 = prod0 ^ (prod2 << 8);
-                prod02 ^= prod02 >> 4;
-                prod02 &= 0x0f0f0f0f0f0f0f0f;
+            uint64_t row_a = a_4row[0] & 0xffff;
+            a_4row[0] >>= 16;
+            uint64_t repeat = 0x0001000100010001*row_a;
+            uint64_t prod0 = tb_4col & repeat;
+            prod0 ^= prod0 >> 8;
+            prod0 &= 0x00ff00ff00ff00ff;
+            row_a = a_4row[2] & 0xffff;
+            a_4row[2] >>= 16;
+            repeat = 0x0001000100010001*row_a;
+            uint64_t prod2 = tb_4col & repeat;
+            prod2 ^= prod2 >> 8;
+            prod2 &= 0x00ff00ff00ff00ff;
+            uint64_t prod02 = prod0 ^ (prod2 << 8);
+            prod02 ^= prod02 >> 4;
+            prod02 &= 0x0f0f0f0f0f0f0f0f;
 
-                row_a = a_4row[1] & 0xffff;
-                a_4row[1] >>= 16;
-                repeat = 0x0001000100010001*row_a;
-                uint64_t prod1 = tb_4col & repeat;
-                prod1 ^= prod1 >> 8;
-                prod1 &= 0x00ff00ff00ff00ff;
-                row_a = a_4row[3] & 0xffff;
-                a_4row[3] >>= 16;
-                repeat = 0x0001000100010001*row_a;
-                uint64_t prod3 = tb_4col & repeat;
-                prod3 ^= prod3 >> 8;
-                prod3 &= 0x00ff00ff00ff00ff;
-                uint64_t prod13 = prod1 ^ (prod3 << 8);
-                prod13 ^= prod13 >> 4;
-                prod13 &= 0x0f0f0f0f0f0f0f0f;
+            row_a = a_4row[1] & 0xffff;
+            a_4row[1] >>= 16;
+            repeat = 0x0001000100010001*row_a;
+            uint64_t prod1 = tb_4col & repeat;
+            prod1 ^= prod1 >> 8;
+            prod1 &= 0x00ff00ff00ff00ff;
+            row_a = a_4row[3] & 0xffff;
+            a_4row[3] >>= 16;
+            repeat = 0x0001000100010001*row_a;
+            uint64_t prod3 = tb_4col & repeat;
+            prod3 ^= prod3 >> 8;
+            prod3 &= 0x00ff00ff00ff00ff;
+            uint64_t prod13 = prod1 ^ (prod3 << 8);
+            prod13 ^= prod13 >> 4;
+            prod13 &= 0x0f0f0f0f0f0f0f0f;
 
-                uint64_t prod0123 = prod02 ^ (prod13 << 4);
-                prod0123 ^= prod0123 << 2;
-                prod0123 ^= prod0123 << 1;
-                prod0123 &= 0x8888888888888888;
-                
-                out >>= 1;
-                out |= prod0123;
+            uint64_t prod0123 = prod02 ^ (prod13 << 4);
+            prod0123 ^= prod0123 << 2;
+            prod0123 ^= prod0123 << 1;
+            prod0123 &= 0x8888888888888888;
+            
+            out >>= 1;
+            out |= prod0123;
         }
         out4x16[i_4col] = out;
     }
 }
+
+__m256i inline tbm_mult_t16x16_m256i(__m256i tb16x16, uint16_t a1x16[16])
+{
+    __m256i prod[8];
+    for (uint8_t i_row = 0; i_row < 8; i_row++)
+    {
+        __m256i prodl = _mm256_and_si256(
+            tb16x16, _mm256_set1_epi16(a1x16[i_row]));
+        // prod0 ^= prod0 << 8; prod0 >>= 8;
+        // xored values are in lower octets of epi16, upper octets are 0
+        prodl = _mm256_xor_si256(prodl, _mm256_slli_epi16(prodl, 8));
+        prodl = _mm256_srli_epi16(prodl, 8);
+        __m256i produ = _mm256_and_si256(
+            tb16x16, _mm256_set1_epi16(a1x16[i_row+8]));
+        // produ ^= produ >> 8; produ <<= 8;
+        // xored values are in upper octets of epi16, lower octets are 0
+        produ = _mm256_xor_si256(produ, _mm256_srli_epi16(produ, 8));
+        produ = _mm256_slli_epi16(produ, 8);
+        prod[i_row] = _mm256_or_si256(prodl, produ);
+    }
+    for (uint8_t i_row = 0; i_row < 4; i_row++)
+    {
+        __m256i prodl = prod[i_row];
+        __m256i mask = _mm256_set1_epi8(0x0f);
+        // prodl ^= prodl >> 4;
+        // xored values are in lower 4-bit of octets, upper 4-bit are 0
+        prodl = _mm256_xor_si256(prodl, _mm256_srli_epi16(prodl, 4));
+        prodl = _mm256_and_si256(mask, prodl);
+        __m256i produ = prod[i_row+4];
+        // produ ^= produ << 4;
+        // xored values are in upper 4-bit of octets, lower 4-bit are 0
+        produ = _mm256_xor_si256(produ, _mm256_slli_epi16(produ, 4));
+        produ = _mm256_andnot_si256(mask, produ);
+        prod[i_row] = _mm256_or_si256(prodl, produ);
+    }
+    for (uint8_t i_row = 0; i_row < 2; i_row++)
+    {
+        __m256i prodl = prod[i_row];
+       __m256i mask = _mm256_set1_epi8(0x33);
+        // prodl ^= prodl >> 2;
+        // xored values are in lower 2-bit, upper 2-bit are 0
+        prodl = _mm256_xor_si256(prodl, _mm256_srli_epi16(prodl, 2));
+        prodl = _mm256_and_si256(mask, prodl);
+        __m256i produ = prod[i_row+2];
+        // produ ^= produ << 2;
+        // xored values are in upper 2-bit, lower 2-bit are 0
+        produ = _mm256_xor_si256(produ, _mm256_slli_epi16(produ, 2));
+        produ = _mm256_andnot_si256(mask, produ);
+        prod[i_row] = _mm256_or_si256(prodl, produ);
+    }
+    for (uint8_t i_row = 0; i_row < 1; i_row++)
+    {
+        __m256i prodl = prod[i_row];
+        __m256i mask = _mm256_set1_epi8(0x55);
+        // prodl ^= prodl >> 1;
+        // xored values are in lower 1-bit, upper 1-bit is 0
+        prodl = _mm256_xor_si256(prodl, _mm256_srli_epi16(prodl, 1));
+        prodl = _mm256_and_si256(mask, prodl);
+        __m256i produ = prod[i_row+1];
+        // produ ^= produ << 1;
+        // xored values are in upper 1-bit, lower 1-bit is 0
+        produ = _mm256_xor_si256(produ, _mm256_slli_epi16(produ, 1));
+        produ = _mm256_andnot_si256(mask, produ);
+        prod[i_row] = _mm256_or_si256(prodl, produ);
+    }
+    return prod[0];
+}
+
+#if 0
+// mult two 32x32 bit matrices with the second matrix transposed
+// note: this code output is transposed, thus input were swapped...
+void inline tbm_mult_t32x32_uint64(
+    uint64_t tb2x32[16], uint64_t a2x32[16], uint64_t out2x32[16])
+{
+    for (uint8_t i_2col = 0; i_2col < 16; i_2col++)
+    { 
+        uint64_t out = 0;
+        uint64_t tb_4col = tb2x32[i_2col];
+        uint64_t a_4row[4];
+        for (uint8_t i_2col = 0; i_2col < 16; i_2col++)
+            a_4row[i_2col] = a2x32[i_2col];
+        for (uint8_t i_bit = 0; i_bit < 2; i_bit++)
+        {
+            uint64_t row_a = a_4row[0] & 0xffff;
+            a_4row[0] >>= 16;
+            uint64_t repeat = 0x0001000100010001*row_a;
+            uint64_t prod0 = tb_4col & repeat;
+            prod0 ^= prod0 >> 8;
+            prod0 &= 0x00ff00ff00ff00ff;
+            row_a = a_4row[2] & 0xffff;
+            a_4row[2] >>= 16;
+            repeat = 0x0001000100010001*row_a;
+            uint64_t prod2 = tb_4col & repeat;
+            prod2 ^= prod2 >> 8;
+            prod2 &= 0x00ff00ff00ff00ff;
+            uint64_t prod02 = prod0 ^ (prod2 << 8);
+            prod02 ^= prod02 >> 4;
+            prod02 &= 0x0f0f0f0f0f0f0f0f;
+
+            row_a = a_4row[1] & 0xffff;
+            a_4row[1] >>= 16;
+            repeat = 0x0001000100010001*row_a;
+            uint64_t prod1 = tb_4col & repeat;
+            prod1 ^= prod1 >> 8;
+            prod1 &= 0x00ff00ff00ff00ff;
+            row_a = a_4row[3] & 0xffff;
+            a_4row[3] >>= 16;
+            repeat = 0x0001000100010001*row_a;
+            uint64_t prod3 = tb_4col & repeat;
+            prod3 ^= prod3 >> 8;
+            prod3 &= 0x00ff00ff00ff00ff;
+            uint64_t prod13 = prod1 ^ (prod3 << 8);
+            prod13 ^= prod13 >> 4;
+            prod13 &= 0x0f0f0f0f0f0f0f0f;
+
+            uint64_t prod0123 = prod02 ^ (prod13 << 4);
+            prod0123 ^= prod0123 << 2;
+            prod0123 ^= prod0123 << 1;
+            prod0123 &= 0x8888888888888888;
+            
+            out >>= 1;
+            out |= prod0123;
+        }
+        out2x32[i_2col] = out;
+    }
+}
+#endif
 
 void tbm_mult_t8x8(
     uint64_t *in8x8, uint64_t *tb8x8, uint64_t n_mat, uint64_t *out8x8)
@@ -620,10 +747,9 @@ void tbm_mult_t16x16(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2) && 0
+#if defined(USE_AVX2)
         __m256i in16x16 = _mm256_loadu_si256((__m256i *)in4x16);
-        __m256i tb16x16 = _mm256_loadu_si256((__m256i *)tb4x16);
-        __m256i out16x16 = tbm_mult_t16x16_m256i(in16x16, tb16x16);
+        __m256i out16x16 = tbm_mult_t16x16_m256i(in16x16, (uint16_t *)tb4x16);
         _mm256_storeu_si256((__m256i *)out4x16, out16x16);
 #else           
         tbm_mult_t16x16_uint64(in4x16, tb4x16, out4x16);
