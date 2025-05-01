@@ -610,7 +610,7 @@ __m256i inline tbm_mult_t16x16_m256i(__m256i tb16x16, uint16_t a1x16[16])
     {
         __m256i prodl = _mm256_and_si256(
             tb16x16, _mm256_set1_epi16(a1x16[i_row]));
-        // prod0 ^= prod0 << 8; prod0 >>= 8;
+        // prodl ^= prodl << 8; prodl >>= 8;
         // xored values are in lower octets of epi16, upper octets are 0
         prodl = _mm256_xor_si256(prodl, _mm256_slli_epi16(prodl, 8));
         prodl = _mm256_srli_epi16(prodl, 8);
@@ -741,6 +741,84 @@ void inline tbm_mult_t32x32_uint64(
     }
 }
 
+void inline tbm_mult_t32x32_m256i(__m256i tb8x32[4], uint32_t a1x32[32])
+{
+    for (uint8_t i_8col = 0; i_8col < 4; i_8col++)
+    {
+        __m256i prod[16];
+        for (uint8_t i_row = 0; i_row < 16; i_row++)
+        {
+            __m256i prodl = _mm256_and_si256(
+                tb8x32[i_8col], _mm256_set1_epi32(a1x32[i_row]));
+            // prodl ^= prodl >> 16;
+            // xored values in lower 16-bit of epi32, upper 16-bit are invalid
+            prodl = _mm256_xor_si256(prodl, _mm256_srli_epi32(prodl, 16));
+            __m256i produ = _mm256_and_si256(
+                tb8x32[i_8col], _mm256_set1_epi32(a1x32[i_row+16]));
+            // produ ^= produ << 16;
+            // xored values in upper 16-bit of epi32, lower 16-bit are invalid
+            produ = _mm256_xor_si256(produ, _mm256_slli_epi32(produ, 16));
+            prod[i_row] = _mm256_blend_epi16(prodl, produ, 0xaa);
+        }
+        for (uint8_t i_row = 0; i_row < 8; i_row++)
+        {
+            __m256i prodl = prod[i_row];
+            prodl = _mm256_xor_si256(prodl, _mm256_slli_epi16(prodl, 8));
+            prodl = _mm256_srli_epi16(prodl, 8);
+            __m256i produ = prod[i_row+8];
+            produ = _mm256_xor_si256(produ, _mm256_srli_epi16(produ, 8));
+            produ = _mm256_slli_epi16(produ, 8);
+            prod[i_row] = _mm256_or_si256(prodl, produ);
+        }
+        for (uint8_t i_row = 0; i_row < 4; i_row++)
+        {
+            __m256i prodl = prod[i_row];
+            __m256i mask = _mm256_set1_epi8(0x0f);
+            // prodl ^= prodl >> 4;
+            // xored values are in lower 4-bit of octets, upper 4-bit are 0
+            prodl = _mm256_xor_si256(prodl, _mm256_srli_epi16(prodl, 4));
+            prodl = _mm256_and_si256(mask, prodl);
+            __m256i produ = prod[i_row+4];
+            // produ ^= produ << 4;
+            // xored values are in upper 4-bit of octets, lower 4-bit are 0
+            produ = _mm256_xor_si256(produ, _mm256_slli_epi16(produ, 4));
+            produ = _mm256_andnot_si256(mask, produ);
+            prod[i_row] = _mm256_or_si256(prodl, produ);
+        }
+        for (uint8_t i_row = 0; i_row < 2; i_row++)
+        {
+            __m256i prodl = prod[i_row];
+        __m256i mask = _mm256_set1_epi8(0x33);
+            // prodl ^= prodl >> 2;
+            // xored values are in lower 2-bit, upper 2-bit are 0
+            prodl = _mm256_xor_si256(prodl, _mm256_srli_epi16(prodl, 2));
+            prodl = _mm256_and_si256(mask, prodl);
+            __m256i produ = prod[i_row+2];
+            // produ ^= produ << 2;
+            // xored values are in upper 2-bit, lower 2-bit are 0
+            produ = _mm256_xor_si256(produ, _mm256_slli_epi16(produ, 2));
+            produ = _mm256_andnot_si256(mask, produ);
+            prod[i_row] = _mm256_or_si256(prodl, produ);
+        }
+        for (uint8_t i_row = 0; i_row < 1; i_row++)
+        {
+            __m256i prodl = prod[i_row];
+            __m256i mask = _mm256_set1_epi8(0x55);
+            // prodl ^= prodl >> 1;
+            // xored values are in lower 1-bit, upper 1-bit is 0
+            prodl = _mm256_xor_si256(prodl, _mm256_srli_epi16(prodl, 1));
+            prodl = _mm256_and_si256(mask, prodl);
+            __m256i produ = prod[i_row+1];
+            // produ ^= produ << 1;
+            // xored values are in upper 1-bit, lower 1-bit is 0
+            produ = _mm256_xor_si256(produ, _mm256_slli_epi16(produ, 1));
+            produ = _mm256_andnot_si256(mask, produ);
+            prod[i_row] = _mm256_or_si256(prodl, produ);
+        }
+        tb8x32[i_8col] = prod[0];
+    }
+}
+
 void tbm_mult_t8x8(
     uint64_t *in8x8, uint64_t *tb8x8, uint64_t n_mat, uint64_t *out8x8)
 {
@@ -777,12 +855,11 @@ void tbm_mult_t32x32(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2) && 0
+#if defined(USE_AVX2)
         __m256i in8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in2x32)+i_8row);
-        tbm_transpose32x32_m256i(in8x32, in8x32);
-        tbm_mult_t32x32_m256i(in8x32, (uint16_t *)tb2x32);
+        tbm_mult_t32x32_m256i(in8x32, (uint32_t *)tb2x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out2x32)+i_8row, in8x32[i_8row]);
 #else           
