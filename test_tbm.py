@@ -33,6 +33,24 @@ def test_encode(mat, n_bit):
     print("")
 
 
+def test_mult(mat, matb, n_bit):
+    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    matb8 = tinybinmat.sprint(matb, n_bit, np.arange(2, dtype=np.uint8))
+
+    t0 = time()
+    ref = mat8 @ matb8
+    ref &= 1
+    ref_duration = time()-t0
+
+    t0 = time()
+    prod = tinybinmat.mult(mat, matb)
+    duration = time()-t0
+
+    prod = tinybinmat.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
+    test_ok(np.array_equal(ref, prod), "mult%d" % (mat.itemsize*8))
+    print(" (duration vs ref: %f)" % (duration/ref_duration))
+
+
 def test_mult_t(mat, matb, n_bit):
     mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
     matb8 = tinybinmat.sprint(matb, n_bit, np.arange(2, dtype=np.uint8))
@@ -109,6 +127,9 @@ if __name__ == "__main__":
         mat2 = np.random.randint(
             0, 2**n_bit-1, (n_run, n_bit_ceil2), dtype=dtype)
         mat2[:, n_bit:] = 0
+
+        if n_bit_ceil2 in [16]:
+            test_mult(mat, mat2, n_bit)
 
         test_mult_t(mat, mat2, n_bit)
 

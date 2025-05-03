@@ -569,10 +569,10 @@ __m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
     __m256i out = _mm256_setzero_si256();
     for (uint8_t i_bit = 0; i_bit < 16; i_bit++)
     {
-        // create bit mask from the most significant bits in a
+        // create bit mask from the least significant bits in a
         __m256i bit_a = _mm256_srai_epi16(a, 16);
-        bit_a = _mm256_slli_epi16(bit_a, 1);
-        __m256i prod = _mm256_and_si256(bit_a, _mm256_set1_epi16(b[i_bit]));
+        a = _mm256_slli_epi16(a, 1);
+        __m256i prod = _mm256_and_si256(bit_a, _mm256_set1_epi16(b[15-i_bit]));
         out = _mm256_xor_si256(out, prod);
     }
     return out;
@@ -924,7 +924,7 @@ void tbm_mult_t16x16(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2) && 0
+#if defined(USE_AVX2)
         __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
         __m256i out16x16 = tbm_mult_t16x16_m256i(in16x16, in2t);
         _mm256_storeu_si256((__m256i *)out, out16x16);
