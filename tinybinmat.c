@@ -797,7 +797,7 @@ __m256i inline tbm_mult_t16x16_m256i(__m256i tb16x16, uint16_t a1x16[16])
 // multiply two 32x32 bit matrices with the second matrix transposed
 // note: this code output is transposed, thus input were swapped...
 void inline tbm_mult_t32x32_uint64(
-    uint64_t tb2x32[16], uint64_t a2x32[16], uint64_t out2x32[16])
+    uint64_t tb2x32[16], uint32_t a1x32[32], uint64_t out2x32[16])
 {
     for (uint8_t i_2col = 0; i_2col < 16; i_2col++)
     { 
@@ -808,16 +808,12 @@ void inline tbm_mult_t32x32_uint64(
         {
             for (uint8_t i_row = 0; i_row < 8; i_row++)
             {
-                uint64_t row_a = a2x32[i_row] >> (32*i_bit);
-                row_a &= 0xffffffff;
-                uint64_t repeat = 0x0000000100000001*row_a;
+                uint64_t repeat = 0x0000000100000001*a1x32[2*i_row+i_bit];
                 uint64_t prodl = tb_2col & repeat;
                 prodl ^= prodl >> 16;
                 prodl &= 0x0000ffff0000ffff;
                 
-                row_a = a2x32[i_row+8] >> (32*i_bit);
-                row_a &= 0xffffffff;
-                repeat = 0x0000000100000001*row_a;
+                repeat = 0x0000000100000001*a1x32[16+2*i_row+i_bit];
                 uint64_t prodh = tb_2col & repeat;
                 prodh ^= prodh << 16;
                 prodh &= 0xffff0000ffff0000;
@@ -978,23 +974,23 @@ void tbm_mult_t16x16(
 }
 
 void tbm_mult_t32x32(
-    uint64_t *in2x32, uint64_t *tb2x32, uint64_t n_mat, uint64_t *out2x32)
+    uint32_t *in, uint32_t *in2t, uint64_t n_mat, uint32_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
 #if defined(USE_AVX2)
         __m256i in8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
-            in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in2x32)+i_8row);
-        tbm_mult_t32x32_m256i(in8x32, (uint32_t *)tb2x32);
+            in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
+        tbm_mult_t32x32_m256i(in8x32, in2t);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
-            _mm256_storeu_si256(((__m256i *)out2x32)+i_8row, in8x32[i_8row]);
+            _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
 #else           
-        tbm_mult_t32x32_uint64(in2x32, tb2x32, out2x32);
+        tbm_mult_t32x32_uint64((uint64_t *)in, in2t, (uint64_t *)out);
 #endif
-        in2x32 += 16;
-        tb2x32 += 16;
-        out2x32 += 16;
-    }
+        in += 32;
+        in2t += 32;
+        out += 32;
+}
 }
 

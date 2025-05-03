@@ -112,15 +112,12 @@ static PyObject* tbm_mult_template(
 
     // create output dimensions
     PyObject *arr_out = PyArray_NewLikeArray(arr_in, NPY_ANYORDER, NULL, 0);
-    uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
 
     // ensure the input array is contiguous.
     // PyArray_GETCONTIGUOUS will increase the reference count.
     arr_in = PyArray_GETCONTIGUOUS(arr_in);
     arr_in2 = PyArray_GETCONTIGUOUS(arr_in2);
 
-    uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
-    uint64_t *in2 = (uint64_t *)PyArray_DATA(arr_in2);
     int py_type = PyArray_TYPE(arr_in);
     if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {
@@ -141,6 +138,9 @@ static PyObject* tbm_mult_template(
     }
     else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
     {
+        uint32_t *in = (uint32_t *)PyArray_DATA(arr_in);
+        uint32_t *in2 = (uint32_t *)PyArray_DATA(arr_in2);
+        uint32_t *out = (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out);
         tbm_mult_t32x32(in, in2, n_mat, out);
     }
     else
