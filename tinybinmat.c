@@ -539,6 +539,8 @@ void tbm_transpose16x16(uint16_t *in, uint64_t n_mat, uint16_t *out)
         __m256i out16x16 = tbm_transpose16x16_m256i(in16x16);
         _mm256_storeu_si256((__m256i *)out, out16x16);
 #else
+        uint64_t *in4x16 = (uint64_t *)in;
+        uint64_t *out4x16 = (uint64_t *)out;
         tbm_transpose16x16_uint64(
             in4x16[0], in4x16[1], in4x16[2], in4x16[3],
             out4x16+0, out4x16+1, out4x16+2, out4x16+3);
@@ -570,15 +572,46 @@ void tbm_transpose32x32(uint32_t *in, uint64_t n_mat, uint32_t *out)
 
 //______________________________________________________________________________
 // multiply two 16x16 bit matrices
+void inline tbm_mult16x16_uint64(uint64_t a[4], uint16_t b[16], uint64_t out[4])
+{
+    uint64_t a_bck[4];
+    for (uint8_t i_4row = 0; i_4row < 4; i_4row++)
+    {
+        a_bck[i_4row] = a[i_4row];
+    }
+    for (uint8_t i_4row = 0; i_4row < 4; i_4row++)
+    {
+        out[i_4row] = 0;
+        for (uint8_t i_bit = 0; i_bit < 16; i_bit++)
+        {
+            // create bit mask from the least significant bits in a
+            uint64_t bit_a = a_bck[i_4row] & 0x0001000100010001;
+            bit_a *= 0xffff;
+            a_bck[i_4row] >>= 1;
+            uint64_t prod = bit_a & (0x0001000100010001*b[i_bit]);
+            out[i_4row] ^= prod;
+        }
+    }
+}
+
 __m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
 {
     __m256i out = _mm256_setzero_si256();
+    // __m256i test_bit = _mm256_set1_epi16(1);
     for (uint8_t i_bit = 0; i_bit < 16; i_bit++)
     {
-        // create bit mask from the least significant bits in a
+#if 1
+        // create bit mask from the most significant bits in a
         __m256i bit_a = _mm256_srai_epi16(a, 16);
         a = _mm256_slli_epi16(a, 1);
         __m256i prod = _mm256_and_si256(bit_a, _mm256_set1_epi16(b[15-i_bit]));
+#else
+        // create bit mask from the least significant bits in a
+        __m256i bit_a = _mm256_and_si256(a, test_bit);
+        bit_a = _mm256_cmpeq_epi16(bit_a, test_bit);
+        test_bit = _mm256_slli_epi16(test_bit, 1);
+        __m256i prod = _mm256_and_si256(bit_a, _mm256_set1_epi16(b[i_bit]));
+#endif
         out = _mm256_xor_si256(out, prod);
     }
     return out;
