@@ -571,6 +571,22 @@ void tbm_transpose32x32(uint32_t *in, uint64_t n_mat, uint32_t *out)
 #pragma GCC pop_options //-----------------------------------------------------
 
 //______________________________________________________________________________
+// multiply two 8x8 bit matrices
+uint64_t inline tbm_mult8x8_uint64(uint64_t a, uint8_t b[8])
+{
+    uint64_t out = 0;
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        // create bit mask from the least significant bits in a
+        uint64_t bit_a = a & 0x0101010101010101;
+        bit_a *= 0xff;
+        a >>= 1;
+        uint64_t prod = bit_a & (0x0101010101010101*b[i_bit]);
+        out ^= prod;
+    }
+    return out;
+}
+
 // multiply two 16x16 bit matrices
 void inline tbm_mult16x16_uint64(uint64_t a[4], uint16_t b[16], uint64_t out[4])
 {
@@ -617,6 +633,25 @@ __m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
     return out;
 }
 
+#pragma GCC push_options //----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
+void tbm_mult8x8(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+#if defined(USE_AVX2) && 0
+        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
+        __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
+        _mm256_storeu_si256((__m256i *)out, out16x16);
+#else           
+        *((uint64_t *)out) = tbm_mult8x8_uint64(*((uint64_t *)in), in2);
+#endif
+        in += 8;
+        in2 += 8;
+        out += 8;
+    }
+}
+
 void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -633,6 +668,7 @@ void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out)
         out += 16;
     }
 }
+#pragma GCC pop_options //-----------------------------------------------------
 
 //______________________________________________________________________________
 // multiply two 8x8 bit matrices with the second matrix transposed
@@ -939,6 +975,8 @@ void inline tbm_mult_t32x32_m256i(__m256i tb8x32[4], uint32_t a1x32[32])
     }
 }
 
+#pragma GCC push_options //----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
 void tbm_mult_t8x8(uint8_t *in, uint8_t *in2t, uint64_t n_mat, uint8_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -993,4 +1031,4 @@ void tbm_mult_t32x32(
         out += 32;
 }
 }
-
+#pragma GCC pop_options //-----------------------------------------------------

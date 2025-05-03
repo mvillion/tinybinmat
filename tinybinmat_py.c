@@ -124,7 +124,10 @@ static PyObject* tbm_mult_template(
         uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
         uint8_t *in2 = (uint8_t *)PyArray_DATA(arr_in2);
         uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_mult_t8x8(in, in2, n_mat, out);
+        if (is_transposed)
+            tbm_mult_t8x8(in, in2, n_mat, out);
+        else
+            tbm_mult8x8(in, in2, n_mat, out);
     }
     else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
     {
