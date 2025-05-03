@@ -221,8 +221,6 @@ if __name__ == '__main__':
     for prn in range(32):
         code, end_state = make_l1ca(prn, code_length)
 
-        from scipy.linalg import toeplitz
-
         code_ref.append(code)
         # code_print = [str(int(k)) for k in code_ref[:64]]
         # print("code_ref %s" % "".join(code_print))

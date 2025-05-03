@@ -196,6 +196,7 @@ void tbm_sprint32(
     }
 }
 
+//______________________________________________________________________________
 uint64_t inline tbm_transpose8x8_uint64(uint64_t in8x8)
 {
     // input is 8x8 bit matrix with 8 rows: 0x0706050403020100
@@ -561,7 +562,41 @@ void tbm_transpose32x32(uint64_t *in2x32, uint64_t n_mat, uint64_t *out2x32)
 }
 #pragma GCC pop_options //-----------------------------------------------------
 
-// mult two 8x8 bit matrices with the second matrix transposed
+//______________________________________________________________________________
+// multiply two 16x16 bit matrices
+__m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
+{
+    __m256i out = _mm256_setzero_si256();
+    for (uint8_t i_bit = 0; i_bit < 16; i_bit++)
+    {
+        // create bit mask from the most significant bits in a
+        __m256i bit_a = _mm256_srai_epi16(a, 16);
+        bit_a = _mm256_slli_epi16(bit_a, 1);
+        __m256i prod = _mm256_and_si256(bit_a, _mm256_set1_epi16(b[i_bit]));
+        out = _mm256_xor_si256(out, prod);
+    }
+    return out;
+}
+
+void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+#if defined(USE_AVX2)
+        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
+        __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
+        _mm256_storeu_si256((__m256i *)out, out16x16);
+#else           
+        tbm_mult16x16_uint64((uint64_t *)in, in2, (uint64_t *)out);
+#endif
+        in += 16;
+        in2 += 16;
+        out += 16;
+    }
+}
+
+//______________________________________________________________________________
+// multiply two 8x8 bit matrices with the second matrix transposed
 uint64_t inline tbm_mult_t8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
 {
     uint64_t out = 0;
@@ -607,30 +642,23 @@ uint64_t inline tbm_mult_t8x8_m256i(uint64_t a8x8, uint64_t tb8x8)
     return out;
 }
 
-// mult two 16x16 bit matrices with the second matrix transposed
+// multiply two 16x16 bit matrices with the second matrix transposed
 // note: this code output is transposed, thus input were swapped...
 void inline tbm_mult_t16x16_uint64(
-    uint64_t tb4x16[4], uint64_t a4x16[4], uint64_t out4x16[4])
+    uint64_t tb4x16[4], uint16_t a[16], uint64_t out4x16[4])
 {
     for (uint8_t i_4col = 0; i_4col < 4; i_4col++)
     { 
         uint64_t out = 0;
         uint64_t tb_4col = tb4x16[i_4col];
-        uint64_t a_4row[4];
-        for (uint8_t i_4row = 0; i_4row < 4; i_4row++)
-            a_4row[i_4row] = a4x16[i_4row];
         uint64_t prod[4];
         for (uint8_t i_bit = 0; i_bit < 4; i_bit++)
         {
-            uint64_t row_a = a_4row[0] & 0xffff;
-            a_4row[0] >>= 16;
-            uint64_t repeat = 0x0001000100010001*row_a;
+            uint64_t repeat = 0x0001000100010001*a[4*0+i_bit];
             prod[0] = tb_4col & repeat;
             prod[0] ^= prod[0] >> 8;
             prod[0] &= 0x00ff00ff00ff00ff;
-            row_a = a_4row[2] & 0xffff;
-            a_4row[2] >>= 16;
-            repeat = 0x0001000100010001*row_a;
+            repeat = 0x0001000100010001*a[4*2+i_bit];
             prod[2] = tb_4col & repeat;
             prod[2] ^= prod[2] >> 8;
             prod[2] &= 0x00ff00ff00ff00ff;
@@ -638,15 +666,11 @@ void inline tbm_mult_t16x16_uint64(
             prod[0] ^= prod[0] >> 4;
             prod[0] &= 0x0f0f0f0f0f0f0f0f;
 
-            row_a = a_4row[1] & 0xffff;
-            a_4row[1] >>= 16;
-            repeat = 0x0001000100010001*row_a;
+            repeat = 0x0001000100010001*a[4*1+i_bit];
             prod[1] = tb_4col & repeat;
             prod[1] ^= prod[1] >> 8;
             prod[1] &= 0x00ff00ff00ff00ff;
-            row_a = a_4row[3] & 0xffff;
-            a_4row[3] >>= 16;
-            repeat = 0x0001000100010001*row_a;
+            repeat = 0x0001000100010001*a[4*3+i_bit];
             prod[3] = tb_4col & repeat;
             prod[3] ^= prod[3] >> 8;
             prod[3] &= 0x00ff00ff00ff00ff;
@@ -733,7 +757,7 @@ __m256i inline tbm_mult_t16x16_m256i(__m256i tb16x16, uint16_t a1x16[16])
     return prod[0];
 }
 
-// mult two 32x32 bit matrices with the second matrix transposed
+// multiply two 32x32 bit matrices with the second matrix transposed
 // note: this code output is transposed, thus input were swapped...
 void inline tbm_mult_t32x32_uint64(
     uint64_t tb2x32[16], uint64_t a2x32[16], uint64_t out2x32[16])
@@ -896,20 +920,20 @@ void tbm_mult_t8x8(
 }
 
 void tbm_mult_t16x16(
-    uint64_t *in4x16, uint64_t *tb4x16, uint64_t n_mat, uint64_t *out4x16)
+    uint16_t *in, uint16_t *in2t, uint64_t n_mat, uint16_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2)
-        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in4x16);
-        __m256i out16x16 = tbm_mult_t16x16_m256i(in16x16, (uint16_t *)tb4x16);
-        _mm256_storeu_si256((__m256i *)out4x16, out16x16);
+#if defined(USE_AVX2) && 0
+        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
+        __m256i out16x16 = tbm_mult_t16x16_m256i(in16x16, in2t);
+        _mm256_storeu_si256((__m256i *)out, out16x16);
 #else           
-        tbm_mult_t16x16_uint64(in4x16, tb4x16, out4x16);
+        tbm_mult_t16x16_uint64((uint64_t *)in, in2t, (uint64_t *)out);
 #endif
-        in4x16 += 4;
-        tb4x16 += 4;
-        out4x16 += 4;
+        in += 16;
+        in2t += 16;
+        out += 16;
     }
 }
 
@@ -933,3 +957,4 @@ void tbm_mult_t32x32(
         out2x32 += 16;
     }
 }
+
