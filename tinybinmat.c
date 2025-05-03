@@ -636,14 +636,12 @@ void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out)
 
 //______________________________________________________________________________
 // multiply two 8x8 bit matrices with the second matrix transposed
-uint64_t inline tbm_mult_t8x8_uint64(uint64_t a8x8, uint64_t tb8x8)
+uint64_t inline tbm_mult_t8x8_uint64(uint64_t a8x8, uint8_t tb[8])
 {
     uint64_t out = 0;
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
     {
-        uint8_t row_b = tb8x8 & 0xff;
-        tb8x8 >>= 8;
-        uint64_t repeat = 0x0101010101010101*row_b;
+        uint64_t repeat = 0x0101010101010101*tb[i_bit];
         uint64_t prod = a8x8 & repeat;
         prod ^= prod << 4;
         prod ^= prod << 2;
@@ -945,16 +943,19 @@ void inline tbm_mult_t32x32_m256i(__m256i tb8x32[4], uint32_t a1x32[32])
     }
 }
 
-void tbm_mult_t8x8(
-    uint64_t *in8x8, uint64_t *tb8x8, uint64_t n_mat, uint64_t *out8x8)
+void tbm_mult_t8x8(uint8_t *in, uint8_t *in2t, uint64_t n_mat, uint8_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
 #if defined(USE_AVX2)
-        out8x8[i_mat] = tbm_mult_t8x8_m256i(in8x8[i_mat], tb8x8[i_mat]);
+        *((uint64_t *)out) = tbm_mult_t8x8_m256i(
+            *((uint64_t *)in), *((uint64_t *)in2t));
 #else
-        out8x8[i_mat] = tbm_mult_t8x8_uint64(in8x8[i_mat], tb8x8[i_mat]);
+        *((uint64_t *)out) = tbm_mult_t8x8_uint64(*((uint64_t *)in), in2t);
 #endif
+        in += 8;
+        in2t += 8;
+        out += 8;
     }
 }
 

@@ -55,9 +55,7 @@ void tbm_transpose32x32(uint32_t *in, uint64_t n_mat, uint32_t *out);
 void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out);
 
 //______________________________________________________________________________
-void tbm_mult_t8x8(
-    uint64_t *in8x8, uint64_t *tb8x8, uint64_t n_mat, uint64_t *out8x8);
-
+void tbm_mult_t8x8(uint8_t *in, uint8_t *intb, uint64_t n_mat, uint8_t *out);
 void tbm_mult_t16x16(
     uint16_t *in, uint16_t *in2t, uint64_t n_mat, uint16_t *out);
         
