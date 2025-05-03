@@ -198,7 +198,7 @@ def l1ca_tiny_32bit(poly, out_len, x_status):
 
         tiny32 = tiny
         for i_pow in range(5):
-            tiny32 = tbm.mult_t(tiny32, tbm.transpose(tiny32))
+            tiny32 = tbm.mult(tiny32, tiny32)
 
         global_mat["tiny32"] = tiny32
 
@@ -212,7 +212,7 @@ def l1ca_tiny_32bit(poly, out_len, x_status):
     y = np.zeros((n_step, ext_size), dtype=bool)
     for i in range(n_step):
         y[i] = x_status_square
-        x_status_square = tbm.mult_t(tiny32, tbm.transpose(x_status_square))
+        x_status_square = tbm.mult(tiny32, x_status_square)
     return y.reshape(-1)[:out_len]
 
 

@@ -681,6 +681,25 @@ void inline tbm_mult32x32_uint64(
     }
 }
 
+void inline tbm_mult32x32_m256i(__m256i a[4], uint32_t b[32], __m256i out[4])
+{
+    for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+    {
+        out[i_8row] = _mm256_setzero_si256();
+        __m256i a_bck = a[i_8row];
+
+        for (uint8_t i_bit = 0; i_bit < 32; i_bit++)
+        {
+            // create bit mask from the most significant bits in a
+            __m256i bit_a = _mm256_srai_epi32(a_bck, 32);
+            a_bck = _mm256_slli_epi32(a_bck, 1);
+            __m256i prod = _mm256_and_si256(
+                bit_a, _mm256_set1_epi32(b[31-i_bit]));
+            out[i_8row] = _mm256_xor_si256(out[i_8row], prod);
+        }
+    }
+}
+
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_mult8x8(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
@@ -728,10 +747,14 @@ void tbm_mult32x32(uint32_t *in, uint32_t *in2, uint64_t n_mat, uint32_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2) && 0
-        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
-        __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
-        _mm256_storeu_si256((__m256i *)out, out16x16);
+#if defined(USE_AVX2)
+        __m256i in8x32[4];
+        __m256i out8x32[4];
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+            in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
+        tbm_mult32x32_m256i(in8x32, in2, out8x32);
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+            _mm256_storeu_si256(((__m256i *)out)+i_8row, out8x32[i_8row]);
 #else           
         tbm_mult32x32_uint64((uint64_t *)in, in2, (uint64_t *)out);
 #endif
