@@ -587,6 +587,30 @@ uint64_t inline tbm_mult8x8_uint64(uint64_t a, uint8_t b[8])
     return out;
 }
 
+// multiply 4 groups of two 16x16 bit matrices
+__m256i inline tbm_mult8x8_m256i(__m256i a, uint8_t b[32])
+{
+    __m128i repeat8x2 = _mm_set_epi8(
+        8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
+    __m256i repeat8x4 = _mm256_set_m128i(repeat8x2, repeat8x2);
+    
+    __m256i out = _mm256_setzero_si256();
+    __m256i test_bit = _mm256_set1_epi8(1);
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        // create bit mask from the least significant bits in a
+        __m256i bit_a = _mm256_and_si256(a, test_bit);
+        bit_a = _mm256_cmpeq_epi8(bit_a, test_bit);
+        test_bit = _mm256_add_epi8(test_bit, test_bit);
+        // load 32 octets from b starting from i_bit
+        __m256i b_i_bit32 = _mm256_loadu_si256((__m256i *)(b+i_bit));
+        b_i_bit32 = _mm256_shuffle_epi8(b_i_bit32, repeat8x4);
+        __m256i prod = _mm256_and_si256(bit_a, b_i_bit32);
+        out = _mm256_xor_si256(out, prod);
+    }
+    return out;
+}
+
 // multiply two 16x16 bit matrices
 void inline tbm_mult16x16_uint64(uint64_t a[4], uint16_t b[16], uint64_t out[4])
 {
@@ -637,15 +661,22 @@ __m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_mult8x8(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
 {
-    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    uint64_t i_avx2 = 0;
+#if defined(USE_AVX2)
+    i_avx2 = n_mat/4*4;
+    for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
     {
-#if defined(USE_AVX2) && 0
-        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
-        __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
-        _mm256_storeu_si256((__m256i *)out, out16x16);
-#else           
-        *((uint64_t *)out) = tbm_mult8x8_uint64(*((uint64_t *)in), in2);
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
+        __m256i out8x8_4 = tbm_mult8x8_m256i(in8x8_4, in2);
+        _mm256_storeu_si256((__m256i *)out, out8x8_4);
+        in += 8*4;
+        in2 += 8*4;
+        out += 8*4;
+    }
 #endif
+    for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
+    {
+        *((uint64_t *)out) = tbm_mult8x8_uint64(*((uint64_t *)in), in2);
         in += 8;
         in2 += 8;
         out += 8;
