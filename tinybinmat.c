@@ -657,6 +657,30 @@ __m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
     return out;
 }
 
+// multiply two 32x32 bit matrices
+void inline tbm_mult32x32_uint64(
+    uint64_t a[16], uint32_t b[32], uint64_t out[16])
+{
+    uint64_t a_bck[16];
+    for (uint8_t i_2row = 0; i_2row < 16; i_2row++)
+    {
+        a_bck[i_2row] = a[i_2row];
+    }
+    for (uint8_t i_2row = 0; i_2row < 16; i_2row++)
+    {
+        out[i_2row] = 0;
+        for (uint8_t i_bit = 0; i_bit < 32; i_bit++)
+        {
+            // create bit mask from the least significant bits in a
+            uint64_t bit_a = a_bck[i_2row] & 0x0000000100000001;
+            bit_a *= 0xffffffff;
+            a_bck[i_2row] >>= 1;
+            uint64_t prod = bit_a & (0x0000000100000001*b[i_bit]);
+            out[i_2row] ^= prod;
+        }
+    }
+}
+
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_mult8x8(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
@@ -697,6 +721,23 @@ void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out)
         in += 16;
         in2 += 16;
         out += 16;
+    }
+}
+
+void tbm_mult32x32(uint32_t *in, uint32_t *in2, uint64_t n_mat, uint32_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+#if defined(USE_AVX2) && 0
+        __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
+        __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
+        _mm256_storeu_si256((__m256i *)out, out16x16);
+#else           
+        tbm_mult32x32_uint64((uint64_t *)in, in2, (uint64_t *)out);
+#endif
+        in += 32;
+        in2 += 32;
+        out += 32;
     }
 }
 #pragma GCC pop_options //-----------------------------------------------------

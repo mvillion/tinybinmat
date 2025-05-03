@@ -128,8 +128,7 @@ if __name__ == "__main__":
             0, 2**n_bit-1, (n_run, n_bit_ceil2), dtype=dtype)
         mat2[:, n_bit:] = 0
 
-        if n_bit_ceil2 < 32:
-            test_mult(mat, mat2, n_bit)
+        test_mult(mat, mat2, n_bit)
 
         test_mult_t(mat, mat2, n_bit)
 

@@ -144,7 +144,10 @@ static PyObject* tbm_mult_template(
         uint32_t *in = (uint32_t *)PyArray_DATA(arr_in);
         uint32_t *in2 = (uint32_t *)PyArray_DATA(arr_in2);
         uint32_t *out = (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_mult_t32x32(in, in2, n_mat, out);
+        if (is_transposed)
+            tbm_mult_t32x32(in, in2, n_mat, out);
+        else
+            tbm_mult32x32(in, in2, n_mat, out);
     }
     else
         failure(PyExc_RuntimeError, "input type is not supported");
