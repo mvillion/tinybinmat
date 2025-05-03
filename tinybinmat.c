@@ -683,21 +683,46 @@ void inline tbm_mult32x32_uint64(
 
 void inline tbm_mult32x32_m256i(__m256i a[4], uint32_t b[32], __m256i out[4])
 {
+    __m256i a_bck[4];
     for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
     {
+        a_bck[i_8row] = a[i_8row];
         out[i_8row] = _mm256_setzero_si256();
-        __m256i a_bck = a[i_8row];
+    }
 
-        for (uint8_t i_bit = 0; i_bit < 32; i_bit++)
+#if 0
+    for (uint8_t i_bit = 0; i_bit < 32; i_bit++)
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
         {
             // create bit mask from the most significant bits in a
-            __m256i bit_a = _mm256_srai_epi32(a_bck, 32);
-            a_bck = _mm256_slli_epi32(a_bck, 1);
+            __m256i bit_a = _mm256_srai_epi32(a_bck[i_8row], 32);
+            a_bck[i_8row] = _mm256_slli_epi32(a_bck[i_8row], 1);
             __m256i prod = _mm256_and_si256(
                 bit_a, _mm256_set1_epi32(b[31-i_bit]));
             out[i_8row] = _mm256_xor_si256(out[i_8row], prod);
         }
+#else
+    __m256i test_bit0 = _mm256_set1_epi32(1);
+    __m256i test_bit16 = _mm256_set1_epi32(0x10000);
+    for (uint8_t i_bit = 0; i_bit < 16; i_bit++)
+    {
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+        {
+            // create bit mask from the least significant bits in a
+            __m256i bit_a = _mm256_and_si256(a[i_8row], test_bit0);
+            bit_a = _mm256_cmpeq_epi32(bit_a, test_bit0);
+            __m256i prod = _mm256_and_si256(bit_a, _mm256_set1_epi32(b[i_bit]));
+            out[i_8row] = _mm256_xor_si256(out[i_8row], prod);
+
+            bit_a = _mm256_and_si256(a[i_8row], test_bit16);
+            bit_a = _mm256_cmpeq_epi32(bit_a, test_bit16);
+            prod = _mm256_and_si256(bit_a, _mm256_set1_epi32(b[i_bit+16]));
+            out[i_8row] = _mm256_xor_si256(out[i_8row], prod);
+        }
+        test_bit0 = _mm256_slli_epi32(test_bit0, 1);
+        test_bit16 = _mm256_slli_epi32(test_bit16, 1);
     }
+#endif
 }
 
 #pragma GCC push_options //----------------------------------------------------
