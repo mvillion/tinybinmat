@@ -216,7 +216,7 @@ def l1ca_tiny_32bit(poly, out_len, x_status):
     return y.reshape(-1)[:out_len]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     code_ref = []
     for prn in range(32):
         code, end_state = make_l1ca(prn, code_length)
