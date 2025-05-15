@@ -97,12 +97,16 @@ if __name__ == "__main__":
     i_circul = (i_circul_ax1+i_circul_ax0).reshape(-1) % 1023
     circul = state[i_circul, :].reshape(n_period, poly_len, poly_len)
     circul = circul.transpose(0, 2, 1)
-    mat_est = circul @ np.repeat(circul[:1, :, :], n_period, axis=0) % 2
-
-    i_bij = (mat_all == mat_est[:1, :, :]).all(axis=(1, 2))
+    import galois
+    GF = galois.GF(2)
+    circul0 = GF(circul[0, :, :])
+    circul = GF(circul)
+    mat_est = np.empty_like(mat_all)
+    for i_mat in range(n_period):
+        mat_est[i_mat, :, :] = np.linalg.solve(circul0, circul[i_mat, :, :]).T
 
     if np.array_equal(mat_all, mat_est):
-        print("matrices do enable to compute PRBS states")
+        print("states do enable to compute PRBS matrices")
     else:
         raise RuntimeError("oops")
 
