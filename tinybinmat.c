@@ -250,6 +250,9 @@ __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
     xor = _mm256_slli_epi64(xor, 7);
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
 #else
+    // _mm256_gf2p8affine_epi64_epi8(I, A, 0) is (A*I.T).T = A.T
+    // a flipud of the matrix is needed before and after the transformation
+    // as conventions are different
     __m128i reverse8_2col = _mm_set_epi8(
         8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
     __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
@@ -601,6 +604,7 @@ uint64_t inline tbm_mult8x8_uint64(uint64_t a, uint8_t b[8])
 // multiply 4 groups of two 8x8 bit matrices
 __m256i inline tbm_mult8x8_m256i(__m256i a, uint8_t b[32])
 {
+#if 0
     __m128i repeat8x2 = _mm_set_epi8(
         8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
     __m256i repeat8x4 = _mm256_set_m128i(repeat8x2, repeat8x2);
@@ -619,6 +623,25 @@ __m256i inline tbm_mult8x8_m256i(__m256i a, uint8_t b[32])
         __m256i prod = _mm256_and_si256(bit_a, b_i_bit32);
         out = _mm256_xor_si256(out, prod);
     }
+#else
+    // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
+    // _mm256_gf2p8affine_epi64_epi8(A, B.T, 0) is (B.T*A.T).T = A*B
+    // the second form needs a single transposition
+    // a flipud of the matrix is needed before and after the transformation
+    // as conventions are different
+    __m128i reverse8_2col = _mm_set_epi8(
+        8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
+
+        __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
+    __m256i a8x8_4rev = _mm256_shuffle_epi8(a, reverse8_col);
+    __m256i b8x8_4 = _mm256_loadu_si256((__m256i *)b);
+    __m256i b8x8_4rev = _mm256_shuffle_epi8(b8x8_4, reverse8_col);
+
+    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
+    __m256i b8x8_4t = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, b8x8_4rev, 0);
+    __m256i out = _mm256_shuffle_epi8(
+        _mm256_gf2p8affine_epi64_epi8(a8x8_4rev, b8x8_4t, 0), reverse8_col);
+#endif
     return out;
 }
 
