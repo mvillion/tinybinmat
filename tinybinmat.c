@@ -843,7 +843,7 @@ uint64_t inline tbm_mult_t8x8_uint64(uint64_t a8x8, uint8_t tb[8])
     return out;
 }
 
-uint64_t inline tbm_mult_t8x8_m256i(uint64_t a8x8, uint64_t tb8x8)
+uint64_t inline tbm_mult_t8x8_single_m256i(uint64_t a8x8, uint64_t tb8x8)
 {
     // note: this code output is transposed, thus input were swapped...
     __m256i a8x8_4 = _mm256_set1_epi64x(tb8x8);
@@ -868,6 +868,24 @@ uint64_t inline tbm_mult_t8x8_m256i(uint64_t a8x8, uint64_t tb8x8)
     out |= (uint32_t)_mm256_movemask_epi8(prod_4);
     return out;
 }
+
+// multiply 4 groups of two 8x8 bit matrices with the second matrces transposed
+__m256i inline tbm_mult_t8x8_m256i(__m256i a, __m256i b)
+{
+    // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
+    // _mm256_gf2p8affine_epi64_epi8(A, B, 0) is (B*A.T).T = A*B.T
+    // a flipud of the matrix is needed before and after the transformation
+    // as conventions are different
+    __m128i reverse8_2col = _mm_set_epi8(
+        8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
+    __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
+    __m256i a8x8_4rev = _mm256_shuffle_epi8(a, reverse8_col);
+    __m256i b8x8_4rev = _mm256_shuffle_epi8(b, reverse8_col);
+
+    return _mm256_shuffle_epi8(
+        _mm256_gf2p8affine_epi64_epi8(a8x8_4rev, b8x8_4rev, 0), reverse8_col);
+}
+
 
 // multiply two 16x16 bit matrices with the second matrix transposed
 // note: this code output is transposed, thus input were swapped...
@@ -1133,14 +1151,25 @@ void inline tbm_mult_t32x32_m256i(__m256i tb8x32[4], uint32_t a1x32[32])
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_mult_t8x8(uint8_t *in, uint8_t *in2t, uint64_t n_mat, uint8_t *out)
 {
-    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
-    {
+    uint64_t i_avx2 = 0;
 #if defined(USE_AVX2)
-        *((uint64_t *)out) = tbm_mult_t8x8_m256i(
+    i_avx2 = n_mat/4*4;
+    for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
+    {
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
+        __m256i in2t_8x8_4 = _mm256_loadu_si256((__m256i *)in2t);
+        __m256i out8x8_4 = tbm_mult_t8x8_m256i(in8x8_4, in2t_8x8_4);
+        _mm256_storeu_si256((__m256i *)out, out8x8_4);
+        in += 8*4;
+        in2t += 8*4;
+        out += 8*4;
+    }
+    *((uint64_t *)out) = tbm_mult_t8x8_single_m256i(
             *((uint64_t *)in), *((uint64_t *)in2t));
-#else
-        *((uint64_t *)out) = tbm_mult_t8x8_uint64(*((uint64_t *)in), in2t);
 #endif
+    for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
+    {
+        *((uint64_t *)out) = tbm_mult_t8x8_uint64(*((uint64_t *)in), in2t);
         in += 8;
         in2t += 8;
         out += 8;
