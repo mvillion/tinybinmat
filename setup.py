@@ -20,7 +20,7 @@ def src_from_name(name, cflag=None):
         out["cflags"] = cflag
     return out
 
-cflag = ["-O3", "-mavx2"]
+cflag = ["-O3", "-mavx2", "-mgfni"]
 lib_list = [
     ("tinybinmat", src_from_name("tinybinmat", cflag=cflag)),
     ("tinybinmat_utils", {"sources": ["tinybinmat_utils.c"]} | inc_dir),
@@ -31,7 +31,7 @@ setup(
     ext_modules=[
         Extension(
             name="tinybinmat", sources=["tinybinmat_py.c"],
-            extra_compile_args=["-mavx2"],
+            extra_compile_args=["-mavx2", "-mgfni"],
             include_dirs=[os.path.dirname(__file__), numpy.get_include()],
             libraries=[k[0] for k in lib_list],
         ),

@@ -17,11 +17,12 @@ import numpy as np
 import sys
 
 from time import time
+from termcolor import colored
 
 
 def test_ok(ok, test_str):
     if ok:
-        print("%20s is ok" % test_str, end="")
+        print(" ".join(["%20s" % test_str, colored("✓", "green")]), end="")
     else:
         raise RuntimeError("error for %s" % test_str)
 

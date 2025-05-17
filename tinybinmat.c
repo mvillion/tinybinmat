@@ -230,6 +230,7 @@ uint64_t inline tbm_transpose8x8_uint64(uint64_t in8x8)
 
 __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 {
+#if 0
     __m256i ur_mask4x4 = _mm256_set1_epi64x(0x00000000f0f0f0f0);
     __m256i xor = _mm256_xor_si256(in8x8_4, _mm256_srli_epi64(in8x8_4, 28));
     xor = _mm256_and_si256(xor, ur_mask4x4);
@@ -237,7 +238,7 @@ __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
     xor = _mm256_slli_epi64(xor, 28);
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
     __m256i ur_mask2x2 = _mm256_set1_epi64x(0x0000cccc0000cccc);
-     xor = _mm256_xor_si256(in8x8_4, _mm256_srli_epi64(in8x8_4, 14));
+    xor = _mm256_xor_si256(in8x8_4, _mm256_srli_epi64(in8x8_4, 14));
     xor = _mm256_and_si256(xor, ur_mask2x2);
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
     xor = _mm256_slli_epi64(xor, 14);
@@ -248,6 +249,16 @@ __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
     xor = _mm256_slli_epi64(xor, 7);
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
+#else
+    __m128i reverse8_2col = _mm_set_epi8(
+        8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
+    __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
+    __m256i in8x8_4rev = _mm256_shuffle_epi8(in8x8_4, reverse8_col);
+
+    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
+    in8x8_4 = _mm256_shuffle_epi8(
+        _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, in8x8_4rev, 0), reverse8_col);
+#endif
     return in8x8_4;
 }
 
@@ -587,7 +598,7 @@ uint64_t inline tbm_mult8x8_uint64(uint64_t a, uint8_t b[8])
     return out;
 }
 
-// multiply 4 groups of two 16x16 bit matrices
+// multiply 4 groups of two 8x8 bit matrices
 __m256i inline tbm_mult8x8_m256i(__m256i a, uint8_t b[32])
 {
     __m128i repeat8x2 = _mm_set_epi8(
@@ -683,14 +694,14 @@ void inline tbm_mult32x32_uint64(
 
 void inline tbm_mult32x32_m256i(__m256i a[4], uint32_t b[32], __m256i out[4])
 {
-    __m256i a_bck[4];
     for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
-    {
-        a_bck[i_8row] = a[i_8row];
         out[i_8row] = _mm256_setzero_si256();
-    }
 
 #if 0
+    __m256i a_bck[4];
+    for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+        a_bck[i_8row] = a[i_8row];
+
     for (uint8_t i_bit = 0; i_bit < 32; i_bit++)
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
         {
