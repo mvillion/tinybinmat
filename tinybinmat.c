@@ -636,7 +636,6 @@ __m256i inline tbm_mult8x8_m256i_gfni(__m256i a, __m256i b)
     // as conventions are different
     __m128i reverse8_2col = _mm_set_epi8(
         8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
-
     __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
     __m256i b8x8_4rev = _mm256_shuffle_epi8(b, reverse8_col);
 
@@ -693,6 +692,11 @@ __m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
 
 __m256i inline tbm_mult16x16_m256i_gfni(__m256i a, __m256i b)
 {
+    __m128i reverse8_2col = _mm_set_epi8(
+        8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
+    __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
+    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
+
     // We want to convert the 16x16 matrix to four 8x8 matrix
     // following the order: [[sub1, sub0], [sub3, sub2]]
     // first 16 bits are in least signicant bir order: b15 down to b0
@@ -702,18 +706,25 @@ __m256i inline tbm_mult16x16_m256i_gfni(__m256i a, __m256i b)
     __m128i split8x8_2 = _mm_set_epi8(
         14, 12, 10, 8, 6, 4, 2, 0, 15, 13, 11, 9, 7, 5, 3, 1);
     __m256i split8x8_4 = _mm256_set_m128i(split8x8_2, split8x8_2);
+    __m256i split8x8_4r = _mm256_shuffle_epi8(split8x8_4, reverse8_col);
     __m256i a_3210 = _mm256_shuffle_epi8(a, split8x8_4);
-    __m256i b_3210 = _mm256_shuffle_epi8(b, split8x8_4);
+    __m256i b_3210r = _mm256_shuffle_epi8(b, split8x8_4r);
+    __m256i b_3210t = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, b_3210r, 0);
 
     __m256i a_3311 = _mm256_permute4x64_epi64(a_3210, _MM_SHUFFLE(3, 3, 1, 1));
     __m256i a_2200 = _mm256_permute4x64_epi64(a_3210, _MM_SHUFFLE(2, 2, 0, 0));
-    __m256i b_1010 = _mm256_permute4x64_epi64(b_3210, _MM_SHUFFLE(1, 0, 1, 0));
-    __m256i b_3232 = _mm256_permute4x64_epi64(b_3210, _MM_SHUFFLE(3, 2, 3, 2));
+    __m256i b_1010t = _mm256_permute4x64_epi64(
+        b_3210t, _MM_SHUFFLE(1, 0, 1, 0));
+    __m256i b_3232t = _mm256_permute4x64_epi64(b_3210t, _MM_SHUFFLE(3, 2, 3, 2));
+
+    // __m256i out = _mm256_xor_si256(
+    //     tbm_mult8x8_m256i_gfni(a_3311, b_1010),
+    //     tbm_mult8x8_m256i_gfni(a_2200, b_3232));
 
     __m256i out = _mm256_xor_si256(
-        tbm_mult8x8_m256i_gfni(a_3311, b_1010),
-        tbm_mult8x8_m256i_gfni(a_2200, b_3232));
-    
+        _mm256_gf2p8affine_epi64_epi8(a_3311, b_1010t, 0),
+        _mm256_gf2p8affine_epi64_epi8(a_2200, b_3232t, 0));
+
     __m128i unsplit8x8_2 = _mm_set_epi8(
         7, 15, 6, 14, 5, 13, 4, 12, 3, 11, 2, 10, 1, 9, 0, 8);
     __m256i unsplit8x8_4 = _mm256_set_m128i(unsplit8x8_2, unsplit8x8_2);
