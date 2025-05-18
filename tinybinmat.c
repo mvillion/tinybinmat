@@ -254,16 +254,17 @@ __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 __m256i inline tbm_transpose8x8_m256i_gfni(__m256i in8x8_4)
 {
     // _mm256_gf2p8affine_epi64_epi8(I, A, 0) is (A*I.T).T = A.T
-    // a flipud of the matrix is needed before and after the transformation
-    // as conventions are different
+    // flipud of the matrix are needed before and after the transformation
+    // as conventions are different: J*gf2p8affine(I, J*A, 0) = J*(J*A).T
+    // _mm256_gf2p8affine_epi64_epi8(J, J*A, 0) is ((J*A)*I.T).T = J*(J*A).T
+    // saves a flipud
     __m128i reverse8_2col = _mm_set_epi8(
         8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
     __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
     __m256i in8x8_4rev = _mm256_shuffle_epi8(in8x8_4, reverse8_col);
 
-    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
-    return _mm256_shuffle_epi8(
-        _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, in8x8_4rev, 0), reverse8_col);
+    __m256i neye_8x8_4 = _mm256_set1_epi64x(0x8040201008040201);
+    return _mm256_gf2p8affine_epi64_epi8(neye_8x8_4, in8x8_4rev, 0);
 }
 
 void inline tbm_transpose16x16_uint64(
@@ -370,6 +371,36 @@ __m256i inline tbm_transpose16x16_m256i(__m256i in16x16)
     in16x16 = _mm256_xor_si256(in16x16, xor);
     return in16x16;
 }
+
+__m256i inline tbm_transpose16x16_m256i_gfni(__m256i a)
+{
+    __m128i reverse8_2col = _mm_set_epi8(
+        8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
+    __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
+    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
+
+    // We want to convert the 16x16 matrix to four 8x8 matrix
+    // following the order: [[sub1, sub0], [sub3, sub2]]
+    // first 16 bits are in least signicant bir order: b15 down to b0
+    // odd and even octets represent submatrices sub1 and sub0
+    // but as 16x16 matrix encodes a row as [b0, b1, ... b15]
+    // matrix sub0 is actually located in the odd octets
+    __m128i split8x8_2 = _mm_set_epi8(
+        14, 12, 10, 8, 6, 4, 2, 0, 15, 13, 11, 9, 7, 5, 3, 1);
+    __m256i split8x8_4 = _mm256_set_m128i(split8x8_2, split8x8_2);
+    __m256i split8x8_4r = _mm256_shuffle_epi8(split8x8_4, reverse8_col);
+    __m256i a3210r = _mm256_shuffle_epi8(a, split8x8_4r);
+
+    __m256i a3120r = _mm256_permute4x64_epi64(a3210r, _MM_SHUFFLE(3, 1, 2, 0));
+
+    __m256i out = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, a3120r, 0);
+
+    __m128i unsplit8x8_2 = _mm_set_epi8(
+        7, 15, 6, 14, 5, 13, 4, 12, 3, 11, 2, 10, 1, 9, 0, 8);
+    __m256i unsplit8x8_4 = _mm256_set_m128i(unsplit8x8_2, unsplit8x8_2);
+    return _mm256_shuffle_epi8(out, unsplit8x8_4);
+}
+
 
 void inline tbm_transpose32x32_uint64(uint64_t in_read[16], uint64_t in[16])
 {
