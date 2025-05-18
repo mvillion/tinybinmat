@@ -12,7 +12,7 @@ Options:
     --n-run=<n>           total number of runs [default: 10]
     --n-run-step=<n>      sub-step run (for L3 and L2 cache)
 """
-import tinybinmat
+import tinybinmat as tbm
 import numpy as np
 import sys
 
@@ -28,15 +28,15 @@ def test_ok(ok, test_str):
 
 
 def test_encode(mat, n_bit):
-    decode = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
-    encode = tinybinmat.encode(decode)
+    decode = tbm.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    encode = tbm.encode(decode)
     test_ok(np.array_equal(mat, encode), "encode%d" % (mat.itemsize*8))
     print("")
 
 
 def test_mult(mat, matb, n_bit):
-    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
-    matb8 = tinybinmat.sprint(matb, n_bit, np.arange(2, dtype=np.uint8))
+    mat8 = tbm.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    matb8 = tbm.sprint(matb, n_bit, np.arange(2, dtype=np.uint8))
 
     t0 = time()
     ref = mat8 @ matb8
@@ -44,17 +44,17 @@ def test_mult(mat, matb, n_bit):
     ref_duration = time()-t0
 
     t0 = time()
-    prod = tinybinmat.mult(mat, matb)
+    prod = tbm.mult(mat, matb)
     duration = time()-t0
 
-    prod = tinybinmat.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
+    prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
     test_ok(np.array_equal(ref, prod), "mult%d" % (mat.itemsize*8))
     print(" (duration vs ref: %f)" % (duration/ref_duration))
 
 
 def test_mult_t(mat, matb, n_bit):
-    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
-    matb8 = tinybinmat.sprint(matb, n_bit, np.arange(2, dtype=np.uint8))
+    mat8 = tbm.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    matb8 = tbm.sprint(matb, n_bit, np.arange(2, dtype=np.uint8))
 
     t0 = time()
     ref = mat8 @ matb8.transpose(0, 2, 1)
@@ -62,26 +62,26 @@ def test_mult_t(mat, matb, n_bit):
     ref_duration = time()-t0
 
     t0 = time()
-    prod = tinybinmat.mult_t(mat, matb)
+    prod = tbm.mult_t(mat, matb)
     duration = time()-t0
 
-    prod = tinybinmat.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
+    prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
     test_ok(np.array_equal(ref, prod), "mult_t%d" % (mat.itemsize*8))
     print(" (duration vs ref: %f)" % (duration/ref_duration))
 
 
 def test_transpose(mat, n_bit):
-    mat8 = tinybinmat.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+    mat8 = tbm.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
 
     t0 = time()
     ref = np.ascontiguousarray(mat8.transpose(0, 2, 1))
     ref_duration = time()-t0
 
     t0 = time()
-    mat8t = tinybinmat.transpose(mat)
+    mat8t = tbm.transpose(mat)
     duration = time()-t0
 
-    mat8t = tinybinmat.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
+    mat8t = tbm.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
     test_ok(np.array_equal(ref, mat8t), "transpose%d" % (mat.itemsize*8))
     print(" (duration vs ref: %f)" % (duration/ref_duration))
 
@@ -106,9 +106,9 @@ if __name__ == "__main__":
 
     n_print = 2
     mat_print = mat[:n_print, :]
-    tinybinmat.print(mat_print, n_bit, " x")
+    tbm.print(mat_print, n_bit, " x")
 
-    mats = tinybinmat.sprint(mat_print, n_bit, np.frombuffer(b" x", np.uint8))
+    mats = tbm.sprint(mat_print, n_bit, np.frombuffer(b" x", np.uint8))
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
     print(mats)
 
@@ -121,7 +121,7 @@ if __name__ == "__main__":
         mat[:, n_bit:] = 0
         if n_bit == 6:
             mat_print = mat[:n_print, :]
-            tinybinmat.print(mat_print, n_bit, " x")
+            tbm.print(mat_print, n_bit, " x")
 
         test_encode(mat, n_bit)
 

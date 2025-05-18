@@ -3,9 +3,9 @@
 void print_avx2_uint64(__m256i reg)
 {
     uint64_t *ptr = (uint64_t *)&reg;
-    for (uint8_t k = 0; k < 3; k++)
+    for (uint8_t k = 3; k != 0; k--)
         printf("%016lx ", ptr[k]);
-    printf("%016lx\n", ptr[3]);
+    printf("%016lx\n", ptr[0]);
 }
 
 __m256i _mm256_movm_epi8_avx2(const uint32_t mask) 
@@ -626,7 +626,7 @@ __m256i inline tbm_mult8x8_m256i(__m256i a, uint8_t b[32])
     return out;
 }
 
-__m256i inline tbm_mult8x8_m256i_gfni(__m256i a, uint8_t b[32])
+__m256i inline tbm_mult8x8_m256i_gfni(__m256i a, __m256i b)
 {
     // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
     // _mm256_gf2p8affine_epi64_epi8(A, B.T, 0) is (B.T*A.T).T = A*B
@@ -637,9 +637,8 @@ __m256i inline tbm_mult8x8_m256i_gfni(__m256i a, uint8_t b[32])
     __m128i reverse8_2col = _mm_set_epi8(
         8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
 
-        __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
-    __m256i b8x8_4 = _mm256_loadu_si256((__m256i *)b);
-    __m256i b8x8_4rev = _mm256_shuffle_epi8(b8x8_4, reverse8_col);
+    __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
+    __m256i b8x8_4rev = _mm256_shuffle_epi8(b, reverse8_col);
 
     __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
     __m256i b8x8_4t = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, b8x8_4rev, 0);
@@ -690,6 +689,35 @@ __m256i inline tbm_mult16x16_m256i(__m256i a, uint16_t b[16])
         out = _mm256_xor_si256(out, prod);
     }
     return out;
+}
+
+__m256i inline tbm_mult16x16_m256i_gfni(__m256i a, __m256i b)
+{
+    // We want to convert the 16x16 matrix to four 8x8 matrix
+    // following the order: [[sub1, sub0], [sub3, sub2]]
+    // first 16 bits are in least signicant bir order: b15 down to b0
+    // odd and even octets represent submatrices sub1 and sub0
+    // but as 16x16 matrix encodes a row as [b0, b1, ... b15]
+    // matrix sub0 is actually located in the odd octets
+    __m128i split8x8_2 = _mm_set_epi8(
+        14, 12, 10, 8, 6, 4, 2, 0, 15, 13, 11, 9, 7, 5, 3, 1);
+    __m256i split8x8_4 = _mm256_set_m128i(split8x8_2, split8x8_2);
+    __m256i a_3210 = _mm256_shuffle_epi8(a, split8x8_4);
+    __m256i b_3210 = _mm256_shuffle_epi8(b, split8x8_4);
+
+    __m256i a_3311 = _mm256_permute4x64_epi64(a_3210, _MM_SHUFFLE(3, 3, 1, 1));
+    __m256i a_2200 = _mm256_permute4x64_epi64(a_3210, _MM_SHUFFLE(2, 2, 0, 0));
+    __m256i b_1010 = _mm256_permute4x64_epi64(b_3210, _MM_SHUFFLE(1, 0, 1, 0));
+    __m256i b_3232 = _mm256_permute4x64_epi64(b_3210, _MM_SHUFFLE(3, 2, 3, 2));
+
+    __m256i out = _mm256_xor_si256(
+        tbm_mult8x8_m256i_gfni(a_3311, b_1010),
+        tbm_mult8x8_m256i_gfni(a_2200, b_3232));
+    
+    __m128i unsplit8x8_2 = _mm_set_epi8(
+        7, 15, 6, 14, 5, 13, 4, 12, 3, 11, 2, 10, 1, 9, 0, 8);
+    __m256i unsplit8x8_4 = _mm256_set_m128i(unsplit8x8_2, unsplit8x8_2);
+    return _mm256_shuffle_epi8(out, unsplit8x8_4);
 }
 
 // multiply two 32x32 bit matrices
@@ -770,7 +798,8 @@ void tbm_mult8x8(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
     for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
     {
         __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
-        __m256i out8x8_4 = tbm_mult8x8_m256i_gfni(in8x8_4, in2);
+        __m256i in2_8x8_4 = _mm256_loadu_si256((__m256i *)in2);
+        __m256i out8x8_4 = tbm_mult8x8_m256i_gfni(in8x8_4, in2_8x8_4);
         _mm256_storeu_si256((__m256i *)out, out8x8_4);
         in += 8*4;
         in2 += 8*4;
@@ -792,7 +821,9 @@ void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out)
     {
 #if defined(USE_AVX2)
         __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
-        __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
+        __m256i in2_16x16 = _mm256_loadu_si256((__m256i *)in2);
+        __m256i out16x16 = tbm_mult16x16_m256i_gfni(in16x16, in2_16x16);
+        // __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
         _mm256_storeu_si256((__m256i *)out, out16x16);
 #else           
         tbm_mult16x16_uint64((uint64_t *)in, in2, (uint64_t *)out);
