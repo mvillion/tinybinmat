@@ -878,6 +878,80 @@ void inline tbm_mult32x32_m256i(__m256i a[4], uint32_t b[32], __m256i out[4])
 #endif
 }
 
+void inline tbm_mult32x32_m256i_gfni(__m256i a[4], __m256i b[4], __m256i out[4])
+{
+    // We want to convert the 8x32 matrix to four 8x8 matrix
+    // following the order: [[sub1, sub0], [sub3, sub2]]
+    // first 32 bits are in least signicant bir order: b31 down to b0
+    // modulo-4 octets represent submatrices sub3 to sub0
+    // but as 32x32 matrix encodes a row as [b0, b1, ... b31]
+    // matrix sub0 is actually located in 3 modulo 4 octets
+    __m128i split8x8_2 = _mm_set_epi8(
+        12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3);
+    __m256i split8x8_4 = _mm256_set_m128i(split8x8_2, split8x8_2);
+    __m256i split8x8_4_128 = _mm256_set_epi32(7, 3, 6, 2, 5, 1, 4, 0);
+
+    // convert format for matrix a
+    for (uint8_t i_row = 0; i_row < 4; i_row++)
+    {
+        __m256i a3210 = _mm256_shuffle_epi8(a[i_row], split8x8_4);
+        a[i_row] = _mm256_permutevar8x32_epi32(a3210, split8x8_4_128);
+    }
+    
+    __m128i split8x8_2r = _mm_set_epi8(
+        0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15);
+    __m256i split8x8_4r = _mm256_set_m128i(split8x8_2r, split8x8_2r);
+    __m256i split8x8_4r_128 = _mm256_set_epi32(3, 7, 2, 6, 1, 5, 0, 4);
+
+    __m128i unsplit8x8_2 = _mm_set_epi8(
+        3, 7, 11, 15, 2, 6, 10, 14, 1, 5, 9, 13, 0, 4, 8, 12);
+    __m256i unsplit8x8_4 = _mm256_set_m128i(unsplit8x8_2, unsplit8x8_2);
+    __m256i unsplit8x8_4_128 = _mm256_set_epi32(7, 5, 3, 1, 6, 4, 2, 0);
+
+    __m256i b3210r = _mm256_shuffle_epi8(b[0], split8x8_4r);
+    __m256i b7654r = _mm256_shuffle_epi8(b[1], split8x8_4r);
+    __m256i bba98r = _mm256_shuffle_epi8(b[2], split8x8_4r);
+    __m256i bfedcr = _mm256_shuffle_epi8(b[3], split8x8_4r);
+    b3210r = _mm256_permutevar8x32_epi32(b3210r, split8x8_4r_128);
+    b7654r = _mm256_permutevar8x32_epi32(b7654r, split8x8_4r_128);
+    bba98r = _mm256_permutevar8x32_epi32(bba98r, split8x8_4r_128);
+    bfedcr = _mm256_permutevar8x32_epi32(bfedcr, split8x8_4r_128);
+
+    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
+    __m256i b3210t = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, b3210r, 0);
+    __m256i b7654t = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, b7654r, 0);
+    __m256i bba98t = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, bba98r, 0);
+    __m256i bfedct = _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, bfedcr, 0);
+
+    uint64_t *a64 = (uint64_t *)a;
+    for (uint8_t i_row = 0; i_row < 4; i_row++)
+    {
+        __m256i repeat; //<! current product of a cell 4 times  
+        __m256i prod; //<! current product of a cell and b row
+        __m256i acc; //<! accumulated sum of the products
+        acc = _mm256_setzero_si256();
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, bfedct, 0);
+        acc = _mm256_xor_si256(acc, prod);
+
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, bba98t, 0);
+        acc = _mm256_xor_si256(acc, prod);
+
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b7654t, 0);
+        acc = _mm256_xor_si256(acc, prod);
+
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b3210t, 0);
+        acc = _mm256_xor_si256(acc, prod);
+
+        acc = _mm256_permutevar8x32_epi32(acc, unsplit8x8_4_128);
+        acc = _mm256_shuffle_epi8(acc, unsplit8x8_4);
+        out[i_row] = acc;
+    }
+}
+
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_mult8x8(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
@@ -930,10 +1004,14 @@ void tbm_mult32x32(uint32_t *in, uint32_t *in2, uint64_t n_mat, uint32_t *out)
     {
 #if defined(USE_AVX2)
         __m256i in8x32[4];
+        __m256i in2_8x32[4];
         __m256i out8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+        {
             in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
-        tbm_mult32x32_m256i(in8x32, in2, out8x32);
+            in2_8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in2)+i_8row);
+        }
+        tbm_mult32x32_m256i_gfni(in8x32, in2_8x32, out8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, out8x32[i_8row]);
 #else           
