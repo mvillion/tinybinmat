@@ -1102,7 +1102,6 @@ __m256i inline tbm_mult_t16x16_m256i_gfni(__m256i a, __m256i b)
     return _mm256_shuffle_epi8(out, unsplit8x8_4);
 }
 
-
 // multiply two 32x32 bit matrices with the second matrix transposed
 // note: this code output is transposed, thus input were swapped...
 void inline tbm_mult_t32x32_uint64(
@@ -1248,6 +1247,81 @@ void inline tbm_mult_t32x32_m256i(__m256i tb8x32[4], uint32_t a1x32[32])
     }
 }
 
+void inline tbm_mult_t32x32_m256i_gfni(__m256i a[4], __m256i b[4])
+{
+    __m128i reverse8_2col = _mm_set_epi8(
+        8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
+    __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
+
+    // We want to convert the 8x32 matrix to four 8x8 matrix
+    // following the order: [[sub1, sub0], [sub3, sub2]]
+    // first 32 bits are in least signicant bir order: b31 down to b0
+    // modulo-4 octets represent submatrices sub3 to sub0
+    // but as 32x32 matrix encodes a row as [b0, b1, ... b31]
+    // matrix sub0 is actually located in 3 modulo 4 octets
+    __m128i split8x8_2 = _mm_set_epi8(
+        12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3);
+    __m256i split8x8_4 = _mm256_set_m128i(split8x8_2, split8x8_2);
+    __m256i split8x8_4_128 = _mm256_set_epi32(7, 3, 6, 2, 5, 1, 4, 0);
+
+    __m128i unsplit8x8_2 = _mm_set_epi8(
+        3, 7, 11, 15, 2, 6, 10, 14, 1, 5, 9, 13, 0, 4, 8, 12);
+    __m256i unsplit8x8_4 = _mm256_set_m128i(unsplit8x8_2, unsplit8x8_2);
+    __m256i unsplit8x8_4_128 = _mm256_set_epi32(7, 5, 3, 1, 6, 4, 2, 0);
+
+    __m256i b3210 = _mm256_shuffle_epi8(b[0], split8x8_4);
+    __m256i b7654 = _mm256_shuffle_epi8(b[1], split8x8_4);
+    __m256i bba98 = _mm256_shuffle_epi8(b[2], split8x8_4);
+    __m256i bfedc = _mm256_shuffle_epi8(b[3], split8x8_4);
+    b3210 = _mm256_permutevar8x32_epi32(b3210, split8x8_4_128);
+    b7654 = _mm256_permutevar8x32_epi32(b7654, split8x8_4_128);
+    bba98 = _mm256_permutevar8x32_epi32(bba98, split8x8_4_128);
+    bfedc = _mm256_permutevar8x32_epi32(bfedc, split8x8_4_128);
+    __m256i b3210r = _mm256_shuffle_epi8(b3210, reverse8_col);
+    __m256i b7654r = _mm256_shuffle_epi8(b7654, reverse8_col);
+    __m256i bba98r = _mm256_shuffle_epi8(bba98, reverse8_col);
+    __m256i bfedcr = _mm256_shuffle_epi8(bfedc, reverse8_col);
+
+    __m256i b32bar = _mm256_permute2x128_si256(b3210r, bba98r, 0x13);
+    __m256i b76fer = _mm256_permute2x128_si256(b7654r, bfedcr, 0x13);
+    __m256i b1098r = _mm256_permute2x128_si256(b3210r, bba98r, 0x02);
+    __m256i b54dcr = _mm256_permute2x128_si256(b7654r, bfedcr, 0x02);
+
+    __m256i b37bfr = _mm256_unpackhi_epi64 (b76fer, b32bar);
+    __m256i b26aer = _mm256_unpacklo_epi64 (b76fer, b32bar);
+    __m256i b159dr = _mm256_unpackhi_epi64 (b54dcr, b1098r);
+    __m256i b048cr = _mm256_unpacklo_epi64 (b54dcr, b1098r);
+
+    for (uint8_t i_row = 0; i_row < 4; i_row++)
+    {
+        __m256i a3210 = _mm256_shuffle_epi8(a[i_row], split8x8_4);
+        a3210 = _mm256_permutevar8x32_epi32(a3210, split8x8_4_128);
+
+        __m256i repeat; //<! current product of a cell 4 times  
+        __m256i prod; //<! current product of a cell and b row
+        __m256i out; //<! accumulated sum of the products
+        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 3, 3));
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b37bfr, 0);
+        out = prod;
+
+        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 2, 2));
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b26aer, 0);
+        out = _mm256_xor_si256(out, prod);
+
+        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(1, 1, 1, 1));
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b159dr, 0);
+        out = _mm256_xor_si256(out, prod);
+
+        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(0, 0, 0, 0));
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b048cr, 0);
+        out = _mm256_xor_si256(out, prod);
+
+        out = _mm256_permutevar8x32_epi32(out, unsplit8x8_4_128);
+        out = _mm256_shuffle_epi8(out, unsplit8x8_4);
+        a[i_row] = out;
+    }
+}
+
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_mult_t8x8(uint8_t *in, uint8_t *in2t, uint64_t n_mat, uint8_t *out)
@@ -1303,9 +1377,13 @@ void tbm_mult_t32x32(
     {
 #if defined(USE_AVX2)
         __m256i in8x32[4];
+        __m256i in2t_8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+        {
             in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
-        tbm_mult_t32x32_m256i(in8x32, in2t);
+            in2t_8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in2t)+i_8row);
+        }
+        tbm_mult_t32x32_m256i_gfni(in8x32, in2t_8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
 #else           
