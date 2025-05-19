@@ -1,4 +1,5 @@
 #include "tinybinmat.h"
+#include "tinybinmat_gfni.h"
 #include "tinybinmat_utils.h"
 
 //______________________________________________________________________________
@@ -87,6 +88,8 @@ static PyObject* tbm_mult_template(
     PyArrayObject *arr_in; //!< 1st array of matrices to multiply
     PyArrayObject *arr_in2; //!< 2nd array of matrices to multiply (transposed)
 
+    bool use_gfni = true;
+
     int ok = PyArg_ParseTuple(
         arg, "O!O!", &PyArray_Type, &arr_in, &PyArray_Type, &arr_in2);
     if (!ok)
@@ -125,9 +128,19 @@ static PyObject* tbm_mult_template(
         uint8_t *in2 = (uint8_t *)PyArray_DATA(arr_in2);
         uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
         if (is_transposed)
-            tbm_mult_t8x8(in, in2, n_mat, out);
+        {
+            if (use_gfni)
+                tbm_mult_t8x8_gfni(in, in2, n_mat, out);
+            else
+                tbm_mult_t8x8(in, in2, n_mat, out);
+        }
         else
-            tbm_mult8x8(in, in2, n_mat, out);
+        {
+            if (use_gfni)
+                tbm_mult8x8_gfni(in, in2, n_mat, out);
+            else
+                tbm_mult8x8(in, in2, n_mat, out);
+        }
     }
     else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
     {
@@ -135,9 +148,19 @@ static PyObject* tbm_mult_template(
         uint16_t *in2 = (uint16_t *)PyArray_DATA(arr_in2);
         uint16_t *out = (uint16_t *)PyArray_DATA((PyArrayObject *)arr_out);
         if (is_transposed)
-            tbm_mult_t16x16(in, in2, n_mat, out);
+        {
+            if (use_gfni)
+                tbm_mult_t16x16_gfni(in, in2, n_mat, out);
+            else
+                tbm_mult_t16x16(in, in2, n_mat, out);
+        }
         else
-            tbm_mult16x16(in, in2, n_mat, out);
+        {
+            if (use_gfni)
+                tbm_mult16x16_gfni(in, in2, n_mat, out);
+            else
+                tbm_mult16x16(in, in2, n_mat, out);
+        }
     }
     else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
     {
@@ -145,9 +168,19 @@ static PyObject* tbm_mult_template(
         uint32_t *in2 = (uint32_t *)PyArray_DATA(arr_in2);
         uint32_t *out = (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out);
         if (is_transposed)
-            tbm_mult_t32x32(in, in2, n_mat, out);
+        {
+            if (use_gfni)
+                tbm_mult_t32x32_gfni(in, in2, n_mat, out);
+            else
+                tbm_mult_t32x32(in, in2, n_mat, out);
+        }
         else
-            tbm_mult32x32(in, in2, n_mat, out);
+        {
+            if (use_gfni)
+                tbm_mult32x32_gfni(in, in2, n_mat, out);
+            else
+                tbm_mult32x32(in, in2, n_mat, out);
+        }
     }
     else
         failure(PyExc_RuntimeError, "input type is not supported");
@@ -309,6 +342,8 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
 {
     PyArrayObject *arr_in;
 
+    bool use_gfni = true;
+
     int ok = PyArg_ParseTuple(arg, "O!", &PyArray_Type, &arr_in);
     if (!ok)
         return failure(PyExc_RuntimeError, "failed to parse parameters");
@@ -339,19 +374,28 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
     {
         uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
         uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_transpose8x8(in, n_mat, out);
+        if (use_gfni)
+            tbm_transpose8x8_gfni(in, n_mat, out);
+        else
+            tbm_transpose8x8(in, n_mat, out);
     }
     else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
     {
         uint16_t *in = (uint16_t *)PyArray_DATA(arr_in);
         uint16_t *out = (uint16_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_transpose16x16(in, n_mat, out);
+        if (use_gfni)
+            tbm_transpose16x16_gfni(in, n_mat, out);
+        else
+            tbm_transpose16x16(in, n_mat, out);
     }
     else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
     {
         uint32_t *in = (uint32_t *)PyArray_DATA(arr_in);
         uint32_t *out = (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_transpose32x32(in, n_mat, out);
+        if (use_gfni)
+            tbm_transpose32x32_gfni(in, n_mat, out);
+        else
+            tbm_transpose32x32(in, n_mat, out);
     }
     else
         failure(PyExc_RuntimeError, "input type is not supported");

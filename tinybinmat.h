@@ -47,16 +47,19 @@ void tbm_sprint32(
     uint8_t *out);
 
 //______________________________________________________________________________
+uint64_t tbm_transpose8x8_uint64(uint64_t in8x8);
 void tbm_transpose8x8(uint8_t *in, uint64_t n_mat, uint8_t *out);
 void tbm_transpose16x16(uint16_t *in, uint64_t n_mat, uint16_t *out);
 void tbm_transpose32x32(uint32_t *in, uint64_t n_mat, uint32_t *out);
 
 //______________________________________________________________________________
+uint64_t tbm_mult8x8_uint64(uint64_t a, uint8_t b[8]);
 void tbm_mult8x8(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out);
 void tbm_mult16x16(uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out);
 void tbm_mult32x32(uint32_t *in, uint32_t *in2, uint64_t n_mat, uint32_t *out);
 
 //______________________________________________________________________________
+uint64_t tbm_mult_t8x8_uint64(uint64_t a8x8, uint8_t tb[8]);
 void tbm_mult_t8x8(uint8_t *in, uint8_t *intb, uint64_t n_mat, uint8_t *out);
 void tbm_mult_t16x16(
     uint16_t *in, uint16_t *in2t, uint64_t n_mat, uint16_t *out);
