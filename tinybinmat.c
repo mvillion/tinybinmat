@@ -549,6 +549,59 @@ void inline tbm_transpose32x32_m256i(__m256i in_read[4], __m256i in[4])
     }
 }
 
+void inline tbm_transpose32x32_m256i_gfni(__m256i in_read[4], __m256i in[4])
+{
+    __m128i split8x8_2r = _mm_set_epi8(
+        0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15);
+    __m256i split8x8_4r = _mm256_set_m128i(split8x8_2r, split8x8_2r);
+    __m256i split8x8_4r_128 = _mm256_set_epi32(3, 7, 2, 6, 1, 5, 0, 4);
+
+    __m128i unsplit8x8_2 = _mm_set_epi8(
+        3, 7, 11, 15, 2, 6, 10, 14, 1, 5, 9, 13, 0, 4, 8, 12);
+    __m256i unsplit8x8_4 = _mm256_set_m128i(unsplit8x8_2, unsplit8x8_2);
+    __m256i unsplit8x8_4_128 = _mm256_set_epi32(7, 5, 3, 1, 6, 4, 2, 0);
+
+    __m256i b3210r = _mm256_shuffle_epi8(in_read[0], split8x8_4r);
+    __m256i b7654r = _mm256_shuffle_epi8(in_read[1], split8x8_4r);
+    __m256i bba98r = _mm256_shuffle_epi8(in_read[2], split8x8_4r);
+    __m256i bfedcr = _mm256_shuffle_epi8(in_read[3], split8x8_4r);
+    b3210r = _mm256_permutevar8x32_epi32(b3210r, split8x8_4r_128);
+    b7654r = _mm256_permutevar8x32_epi32(b7654r, split8x8_4r_128);
+    bba98r = _mm256_permutevar8x32_epi32(bba98r, split8x8_4r_128);
+    bfedcr = _mm256_permutevar8x32_epi32(bfedcr, split8x8_4r_128);
+
+    __m256i b32bar = _mm256_permute2x128_si256(b3210r, bba98r, 0x13);
+    __m256i b76fer = _mm256_permute2x128_si256(b7654r, bfedcr, 0x13);
+    __m256i b1098r = _mm256_permute2x128_si256(b3210r, bba98r, 0x02);
+    __m256i b54dcr = _mm256_permute2x128_si256(b7654r, bfedcr, 0x02);
+
+    __m256i b37bfr = _mm256_unpackhi_epi64 (b76fer, b32bar);
+    __m256i b26aer = _mm256_unpacklo_epi64 (b76fer, b32bar);
+    __m256i b159dr = _mm256_unpackhi_epi64 (b54dcr, b1098r);
+    __m256i b048cr = _mm256_unpacklo_epi64 (b54dcr, b1098r);
+
+    __m256i neye_8x8_4 = _mm256_set1_epi64x(0x8040201008040201);
+    __m256i out = _mm256_gf2p8affine_epi64_epi8(neye_8x8_4, b37bfr, 0);
+    out = _mm256_permutevar8x32_epi32(out, unsplit8x8_4_128);
+    out = _mm256_shuffle_epi8(out, unsplit8x8_4);
+    in[0] = out;
+
+    out = _mm256_gf2p8affine_epi64_epi8(neye_8x8_4, b26aer, 0);
+    out = _mm256_permutevar8x32_epi32(out, unsplit8x8_4_128);
+    out = _mm256_shuffle_epi8(out, unsplit8x8_4);
+    in[1] = out;
+
+    out = _mm256_gf2p8affine_epi64_epi8(neye_8x8_4, b159dr, 0);
+    out = _mm256_permutevar8x32_epi32(out, unsplit8x8_4_128);
+    out = _mm256_shuffle_epi8(out, unsplit8x8_4);
+    in[2] = out;
+
+    out = _mm256_gf2p8affine_epi64_epi8(neye_8x8_4, b048cr, 0);
+    out = _mm256_permutevar8x32_epi32(out, unsplit8x8_4_128);
+    out = _mm256_shuffle_epi8(out, unsplit8x8_4);
+    in[3] = out;
+}
+
 #define USE_AVX2
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
@@ -602,7 +655,7 @@ void tbm_transpose32x32(uint32_t *in, uint64_t n_mat, uint32_t *out)
         __m256i in8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
-        tbm_transpose32x32_m256i(in8x32, in8x32);
+        tbm_transpose32x32_m256i_gfni(in8x32, in8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
 #else
@@ -1249,10 +1302,6 @@ void inline tbm_mult_t32x32_m256i(__m256i tb8x32[4], uint32_t a1x32[32])
 
 void inline tbm_mult_t32x32_m256i_gfni(__m256i a[4], __m256i b[4])
 {
-    __m128i reverse8_2col = _mm_set_epi8(
-        8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7);
-    __m256i reverse8_col = _mm256_set_m128i(reverse8_2col, reverse8_2col);
-
     // We want to convert the 8x32 matrix to four 8x8 matrix
     // following the order: [[sub1, sub0], [sub3, sub2]]
     // first 32 bits are in least signicant bir order: b31 down to b0
@@ -1264,23 +1313,31 @@ void inline tbm_mult_t32x32_m256i_gfni(__m256i a[4], __m256i b[4])
     __m256i split8x8_4 = _mm256_set_m128i(split8x8_2, split8x8_2);
     __m256i split8x8_4_128 = _mm256_set_epi32(7, 3, 6, 2, 5, 1, 4, 0);
 
+    // convert format for matrix a
+    for (uint8_t i_row = 0; i_row < 4; i_row++)
+    {
+        __m256i a3210 = _mm256_shuffle_epi8(a[i_row], split8x8_4);
+        a[i_row] = _mm256_permutevar8x32_epi32(a3210, split8x8_4_128);
+    }
+    
+    __m128i split8x8_2r = _mm_set_epi8(
+        0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15);
+    __m256i split8x8_4r = _mm256_set_m128i(split8x8_2r, split8x8_2r);
+    __m256i split8x8_4r_128 = _mm256_set_epi32(3, 7, 2, 6, 1, 5, 0, 4);
+
     __m128i unsplit8x8_2 = _mm_set_epi8(
         3, 7, 11, 15, 2, 6, 10, 14, 1, 5, 9, 13, 0, 4, 8, 12);
     __m256i unsplit8x8_4 = _mm256_set_m128i(unsplit8x8_2, unsplit8x8_2);
     __m256i unsplit8x8_4_128 = _mm256_set_epi32(7, 5, 3, 1, 6, 4, 2, 0);
 
-    __m256i b3210 = _mm256_shuffle_epi8(b[0], split8x8_4);
-    __m256i b7654 = _mm256_shuffle_epi8(b[1], split8x8_4);
-    __m256i bba98 = _mm256_shuffle_epi8(b[2], split8x8_4);
-    __m256i bfedc = _mm256_shuffle_epi8(b[3], split8x8_4);
-    b3210 = _mm256_permutevar8x32_epi32(b3210, split8x8_4_128);
-    b7654 = _mm256_permutevar8x32_epi32(b7654, split8x8_4_128);
-    bba98 = _mm256_permutevar8x32_epi32(bba98, split8x8_4_128);
-    bfedc = _mm256_permutevar8x32_epi32(bfedc, split8x8_4_128);
-    __m256i b3210r = _mm256_shuffle_epi8(b3210, reverse8_col);
-    __m256i b7654r = _mm256_shuffle_epi8(b7654, reverse8_col);
-    __m256i bba98r = _mm256_shuffle_epi8(bba98, reverse8_col);
-    __m256i bfedcr = _mm256_shuffle_epi8(bfedc, reverse8_col);
+    __m256i b3210r = _mm256_shuffle_epi8(b[0], split8x8_4r);
+    __m256i b7654r = _mm256_shuffle_epi8(b[1], split8x8_4r);
+    __m256i bba98r = _mm256_shuffle_epi8(b[2], split8x8_4r);
+    __m256i bfedcr = _mm256_shuffle_epi8(b[3], split8x8_4r);
+    b3210r = _mm256_permutevar8x32_epi32(b3210r, split8x8_4r_128);
+    b7654r = _mm256_permutevar8x32_epi32(b7654r, split8x8_4r_128);
+    bba98r = _mm256_permutevar8x32_epi32(bba98r, split8x8_4r_128);
+    bfedcr = _mm256_permutevar8x32_epi32(bfedcr, split8x8_4r_128);
 
     __m256i b32bar = _mm256_permute2x128_si256(b3210r, bba98r, 0x13);
     __m256i b76fer = _mm256_permute2x128_si256(b7654r, bfedcr, 0x13);
@@ -1292,28 +1349,33 @@ void inline tbm_mult_t32x32_m256i_gfni(__m256i a[4], __m256i b[4])
     __m256i b159dr = _mm256_unpackhi_epi64 (b54dcr, b1098r);
     __m256i b048cr = _mm256_unpacklo_epi64 (b54dcr, b1098r);
 
+    uint64_t *a64 = (uint64_t *)a;
     for (uint8_t i_row = 0; i_row < 4; i_row++)
     {
-        __m256i a3210 = _mm256_shuffle_epi8(a[i_row], split8x8_4);
-        a3210 = _mm256_permutevar8x32_epi32(a3210, split8x8_4_128);
+        // __m256i a3210 = a[i_row];
 
         __m256i repeat; //<! current product of a cell 4 times  
         __m256i prod; //<! current product of a cell and b row
         __m256i out; //<! accumulated sum of the products
-        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 3, 3));
-        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b37bfr, 0);
-        out = prod;
-
-        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 2, 2));
-        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b26aer, 0);
+        out = _mm256_setzero_si256();
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(0, 0, 0, 0));
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b048cr, 0);
         out = _mm256_xor_si256(out, prod);
 
-        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(1, 1, 1, 1));
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(1, 1, 1, 1));
+        repeat = _mm256_set1_epi64x(*a64++);
         prod = _mm256_gf2p8affine_epi64_epi8(repeat, b159dr, 0);
         out = _mm256_xor_si256(out, prod);
 
-        repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(0, 0, 0, 0));
-        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b048cr, 0);
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 2, 2));
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b26aer, 0);
+        out = _mm256_xor_si256(out, prod);
+
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 3, 3));
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b37bfr, 0);
         out = _mm256_xor_si256(out, prod);
 
         out = _mm256_permutevar8x32_epi32(out, unsplit8x8_4_128);
