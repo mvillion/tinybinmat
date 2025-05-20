@@ -64,8 +64,8 @@ These instructions enable to perform multiple xor at a time:
 
 | instruction                      | n_prod  | n_acc |
 | :------------------------------- | ------: | ----: |
-| _mm256_xor_si256 (mult)          |     256 |     0 |
+| _mm256_and_si256 (mult)          |     256 |     0 |
 | _mm256_xor_si256 (acc)           |       0 |   256 |
-| _mm256_gf2p8affineinv_epi64_epi8 |     512 |   512 |
+| _mm256_gf2p8affineinv_epi64_epi8 |    2048 |  2048 |
 | _mm256_popcnt_epi(8,16,32)       |       0 |   256 |
 
