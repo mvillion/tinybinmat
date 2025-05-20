@@ -46,6 +46,11 @@ If chosen order were 16 columns of uint16, products like A<ins>y</ins> with <ins
 
 Transposition function converts one choice to the other.
 
+### III.1.a GFNI bit order
+
+For unknown reasons GFNI instructions use little endian order for rows (8 bits in octets) and also for columns.
+The 1st octet of the matrix is its last row.
+
 ## III.2. supported operations
 
 conversion:
@@ -63,7 +68,7 @@ multiplication:
 
 Operations on GF2 imply usage of xor for matrix products and accumulations.
 
-These instructions enable to perform multiple xor at a time:
+These instructions enable to perform multiple GF2 multiplications or additions at a time:
 
 | instruction                      | n<sub>prod</sub> | n<sub>acc</sub> |
 | :------------------------------- | ---: | ---: |
