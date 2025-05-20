@@ -55,3 +55,17 @@ transpose:
 multiplication:
 - mult: multiply twp tinybinmat matrices
 - mult_t: multiply a tinybinmat by another transposed tinybinmat
+
+## III.3. AVX(2) instructions
+
+Operations on GF2 imply usage of xor for matrix products and accumulations.
+
+These instructions enable to perform multiple xor at a time:
+
+| instruction                      | n_prod  | n_acc |
+| :------------------------------- | ------: | ----: |
+| _mm256_xor_si256 (mult)          |     256 |     0 |
+| _mm256_xor_si256 (acc)           |       0 |   256 |
+| _mm256_gf2p8affineinv_epi64_epi8 |     512 |   512 |
+| _mm256_popcnt_epi(8,16,32)       |       0 |   256 |
+
