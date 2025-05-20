@@ -36,11 +36,14 @@ Preferred matrix dimension order is C order.
 The last dimension is 8, 16 or 32 bit long.
 A consequence of this choice is that a single dimension vector can only be encoded as a row vector.
 Matrix by vectors operations can only be:
-- A*y.T or A*[y_1; y_2; ...; y_N].T
-or
-- y*A or [y_1; y_2; ...; y_N]*A
+- A<ins>y</ins><sup>T</sup> or A[<ins>y</ins><sub>1</sub>; <ins>y</ins><sub>2</sub>; ... ; <ins>y</ins><sub>N</sub>]<sup>T</sup>
 
-If chosen order were 16 columns of uint16, products like A*y with y as a column vector would be possible.
+or
+
+- <ins>y</ins>A or [<ins>y</ins><sub>1</sub>; <ins>y</ins><sub>2</sub>; ... ; <ins>y</ins><sub>N</sub>]A
+
+If chosen order were 16 columns of uint16, products like A<ins>y</ins> with <ins>y</ins> as a column vector would be possible.
+
 Transposition function converts one choice to the other.
 
 ## III.2. supported operations
@@ -62,10 +65,10 @@ Operations on GF2 imply usage of xor for matrix products and accumulations.
 
 These instructions enable to perform multiple xor at a time:
 
-| instruction                      | n_prod  | n_acc |
-| :------------------------------- | ------: | ----: |
-| _mm256_and_si256 (mult)          |     256 |     0 |
-| _mm256_xor_si256 (acc)           |       0 |   256 |
-| _mm256_gf2p8affineinv_epi64_epi8 |    2048 |  2048 |
-| _mm256_popcnt_epi(8,16,32)       |       0 |   256 |
+| instruction                      | n<sub>prod</sub> | n<sub>acc</sub> |
+| :------------------------------- | ---: | ---: |
+| _mm256_and_si256 (mult)          |  256 |    0 |
+| _mm256_xor_si256 (acc)           |    0 |  256 |
+| _mm256_gf2p8affineinv_epi64_epi8 | 2048 | 2048 |
+| _mm256_popcnt_epi(8,16,32)       |    0 |  256 |
 
