@@ -98,14 +98,11 @@ void inline tbm_transpose32x32_m256i_gfni(__m256i in_read[4], __m256i in[4])
     in[3] = out;
 }
 
-#define USE_AVX2
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_transpose8x8_gfni(uint8_t *in, uint64_t n_mat, uint8_t *out)
 {
-    uint64_t i_avx2 = 0;
-#if defined(USE_AVX2)
-    i_avx2 = n_mat/4*4;
+    uint64_t i_avx2 = n_mat/4*4;
     for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
     {
         __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
@@ -114,7 +111,6 @@ void tbm_transpose8x8_gfni(uint8_t *in, uint64_t n_mat, uint8_t *out)
         in += 8*4;
         out += 8*4;
     }
-#endif
     for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
     {
         *((uint64_t *)out) = tbm_transpose8x8_uint64(*((uint64_t *)in));
@@ -127,17 +123,9 @@ void tbm_transpose16x16_gfni(uint16_t *in, uint64_t n_mat, uint16_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2)
         __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
         __m256i out16x16 = tbm_transpose16x16_m256i_gfni(in16x16);
         _mm256_storeu_si256((__m256i *)out, out16x16);
-#else
-        uint64_t *in4x16 = (uint64_t *)in;
-        uint64_t *out4x16 = (uint64_t *)out;
-        tbm_transpose16x16_uint64(
-            in4x16[0], in4x16[1], in4x16[2], in4x16[3],
-            out4x16+0, out4x16+1, out4x16+2, out4x16+3);
-#endif
         in += 16;
         out += 16;
     }
@@ -147,16 +135,12 @@ void tbm_transpose32x32_gfni(uint32_t *in, uint64_t n_mat, uint32_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2)
         __m256i in8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
         tbm_transpose32x32_m256i_gfni(in8x32, in8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
-#else
-        tbm_transpose32x32_uint64((uint64_t *)in, (uint64_t *)out);
-#endif
         in += 32;
         out += 32;
     }
@@ -300,7 +284,6 @@ void inline tbm_mult32x32_m256i_gfni(__m256i a[4], __m256i b[4], __m256i out[4])
 void tbm_mult8x8_gfni(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
 {
     uint64_t i_avx2 = 0;
-#if defined(USE_AVX2)
     i_avx2 = n_mat/4*4;
     for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
     {
@@ -312,7 +295,6 @@ void tbm_mult8x8_gfni(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out)
         in2 += 8*4;
         out += 8*4;
     }
-#endif
     for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
     {
         *((uint64_t *)out) = tbm_mult8x8_uint64(*((uint64_t *)in), in2);
@@ -327,15 +309,11 @@ void tbm_mult16x16_gfni(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2)
         __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
         __m256i in2_16x16 = _mm256_loadu_si256((__m256i *)in2);
         __m256i out16x16 = tbm_mult16x16_m256i_gfni(in16x16, in2_16x16);
         // __m256i out16x16 = tbm_mult16x16_m256i(in16x16, in2);
         _mm256_storeu_si256((__m256i *)out, out16x16);
-#else           
-        tbm_mult16x16_uint64((uint64_t *)in, in2, (uint64_t *)out);
-#endif
         in += 16;
         in2 += 16;
         out += 16;
@@ -347,7 +325,6 @@ void tbm_mult32x32_gfni(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2)
         __m256i in8x32[4];
         __m256i in2_8x32[4];
         __m256i out8x32[4];
@@ -359,9 +336,6 @@ void tbm_mult32x32_gfni(
         tbm_mult32x32_m256i_gfni(in8x32, in2_8x32, out8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, out8x32[i_8row]);
-#else           
-        tbm_mult32x32_uint64((uint64_t *)in, in2, (uint64_t *)out);
-#endif
         in += 32;
         in2 += 32;
         out += 32;
@@ -536,14 +510,10 @@ void tbm_mult_t16x16_gfni(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2)
         __m256i in16x16 = _mm256_loadu_si256((__m256i *)in);
         __m256i in2_16x16 = _mm256_loadu_si256((__m256i *)in2t);
         __m256i out16x16 = tbm_mult_t16x16_m256i_gfni(in16x16, in2_16x16);
         _mm256_storeu_si256((__m256i *)out, out16x16);
-#else           
-        tbm_mult_t16x16_uint64((uint64_t *)in, in2t, (uint64_t *)out);
-#endif
         in += 16;
         in2t += 16;
         out += 16;
@@ -555,7 +525,6 @@ void tbm_mult_t32x32_gfni(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-#if defined(USE_AVX2)
         __m256i in8x32[4];
         __m256i in2t_8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
@@ -566,9 +535,6 @@ void tbm_mult_t32x32_gfni(
         tbm_mult_t32x32_m256i_gfni(in8x32, in2t_8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
-#else           
-        tbm_mult_t32x32_uint64((uint64_t *)in, in2t, (uint64_t *)out);
-#endif
         in += 32;
         in2t += 32;
         out += 32;
