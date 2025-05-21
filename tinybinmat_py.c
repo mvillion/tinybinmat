@@ -84,22 +84,38 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg)
 }
 
 static PyObject* tbm_mult_template(
-    PyObject *self, PyObject *arg, bool is_transposed)
+    PyObject *self, PyObject *arg, PyObject *kwarg, bool is_transposed)
 {
     PyArrayObject *arr_in; //!< 1st array of matrices to multiply
     PyArrayObject *arr_in2; //!< 2nd array of matrices to multiply (transposed)
+    char *method_str = NULL;
 
-    bool use_avx2 = true;
-    bool use_gfni = true;
-    if (use_gfni)
-        use_avx2 = false;
-    uint8_t i_fun = use_avx2+2*use_gfni+3*is_transposed;
-
-    int ok = PyArg_ParseTuple(
-        arg, "O!O!", &PyArray_Type, &arr_in, &PyArray_Type, &arr_in2);
+    static char *kwlist[] = {"in", "in2", "method", NULL};
+    int ok = PyArg_ParseTupleAndKeywords(
+        arg, kwarg, "O!O!|s", kwlist, &PyArray_Type, &arr_in, 
+        &PyArray_Type, &arr_in2, &method_str);
     if (!ok)
         return failure(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
+
+    uint8_t i_fun = 0;
+    if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
+    {
+        i_fun = 0;
+    }
+    else if (strcmp(method_str, "avx2") == 0)
+    {
+        i_fun = 1;
+    }
+    else if (strcmp(method_str, "gfni") == 0)
+    {
+        i_fun = 2;
+    }
+    else
+        return failure(
+            PyExc_RuntimeError,
+            "method string shall be 'avx2', 'gfni', or 'default'");
+    i_fun += is_transposed ? 3 : 0;
 
     int n_dim = PyArray_NDIM(arr_in);
     if (n_dim < 1)
@@ -166,14 +182,14 @@ static PyObject* tbm_mult_template(
     return arr_out;
 }
 
-static PyObject* tbm_mult(PyObject *self, PyObject *arg)
+static PyObject* tbm_mult(PyObject *self, PyObject *arg, PyObject *kwarg)
 {
-    return tbm_mult_template(self, arg, false);
+    return tbm_mult_template(self, arg, kwarg, false);
 }
 
-static PyObject* tbm_mult_t(PyObject *self, PyObject *arg)
+static PyObject* tbm_mult_t(PyObject *self, PyObject *arg, PyObject *kwarg)
 {
-    return tbm_mult_template(self, arg, true);
+    return tbm_mult_template(self, arg, kwarg, true);
 }
 
 static PyObject* tbm_print(PyObject *self, PyObject *arg)
@@ -313,20 +329,36 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg)
     return arr_out;
 }
 
-static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
+static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
 {
     PyArrayObject *arr_in;
+   char *method_str = NULL;
 
-    bool use_avx2 = true;
-    bool use_gfni = true;
-    if (use_gfni)
-        use_avx2 = false;
-    uint8_t i_fun = use_avx2+2*use_gfni;
-
-    int ok = PyArg_ParseTuple(arg, "O!", &PyArray_Type, &arr_in);
+    static char *kwlist[] = {"in", "method", NULL};
+    int ok = PyArg_ParseTupleAndKeywords(
+        arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, 
+        &method_str);
     if (!ok)
         return failure(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
+
+    uint8_t i_fun = 0;
+    if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
+    {
+        i_fun = 0;
+    }
+    else if (strcmp(method_str, "avx2") == 0)
+    {
+        i_fun = 1;
+    }
+    else if (strcmp(method_str, "gfni") == 0)
+    {
+        i_fun = 2;
+    }
+    else
+        return failure(
+            PyExc_RuntimeError,
+            "method string shall be 'avx2', 'gfni', or 'default'");
 
     // create output dimensions
     int n_dim = PyArray_NDIM(arr_in);
@@ -386,14 +418,24 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
 //______________________________________________________________________________
 // set up the methods table
 static PyMethodDef method_def[] = {
-    {"encode", tbm_encode, METH_VARARGS,
-        "encode a square matrix into a tinybinmat"},
-    {"mult", tbm_mult, METH_VARARGS, "multiply twp tinybinmat matrices"},
-    {"mult_t", tbm_mult_t, METH_VARARGS,
-    "multiply a tinybinmat by another transposed tinybinmat"},
+    {
+        "encode", tbm_encode, METH_VARARGS,
+        "encode a square matrix into a tinybinmat"
+    },
+    {
+        "mult", (PyCFunction) tbm_mult, METH_VARARGS | METH_KEYWORDS, 
+        "multiply twp tinybinmat matrices"
+    },
+    {
+        "mult_t", (PyCFunction) tbm_mult_t, METH_VARARGS | METH_KEYWORDS,
+        "multiply a tinybinmat by another transposed tinybinmat"
+    },
     {"print", tbm_print, METH_VARARGS, "print tinybinmat"},
     {"sprint", tbm_sprint, METH_VARARGS, "convert to uint8 array"},
-    {"transpose", tbm_transpose, METH_VARARGS, "transpose tinybinmat"},
+    {
+        "transpose", (PyCFunction) tbm_transpose, METH_VARARGS | METH_KEYWORDS, 
+        "transpose tinybinmat"
+    },
     {NULL, NULL, 0, NULL}
 };
 

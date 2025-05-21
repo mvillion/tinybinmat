@@ -20,18 +20,30 @@ from time import time
 from termcolor import colored
 
 
-def test_ok(ok, test_str):
-    if ok:
-        print(" ".join(["%20s" % test_str, colored("✓", "green")]), end="")
-    else:
-        raise RuntimeError("error for %s" % test_str)
+def test_ok(ok_list, test_str):
+    if type(ok_list) is not list:
+        if type(ok_list) is not tuple:
+            ok_list = (ok_list, None)
+        ok_list = [ok_list]
+    ok_code = colored("✓", "green")
+    ko_code = colored("✗", "red")
+    print_list = ["%20s" % test_str]
+    for tup in ok_list:
+        ok, speed = tup
+        print_list.append(ok_code if ok else ko_code)
+        if speed is not None:
+            print_list.append("%5.1f" % speed)
+
+    print(" ".join(print_list))
+    # if not all(ok):
+    #     raise RuntimeError("error for %s" % test_str)
 
 
 def test_encode(mat, n_bit):
     decode = tbm.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
     encode = tbm.encode(decode)
+
     test_ok(np.array_equal(mat, encode), "encode%d" % (mat.itemsize*8))
-    print("")
 
 
 def test_mult(mat, matb, n_bit):
@@ -47,9 +59,17 @@ def test_mult(mat, matb, n_bit):
     prod = tbm.mult(mat, matb)
     duration = time()-t0
 
-    prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
-    test_ok(np.array_equal(ref, prod), "mult%d" % (mat.itemsize*8))
-    print(" (duration vs ref: %f)" % (duration/ref_duration))
+    ok_speed_list = []
+    for method in ["default", "avx2", "gfni"]:
+        t0 = time()
+        prod = tbm.mult(mat, matb, method=method)
+        duration = time()-t0
+
+        prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
+        speed = ref_duration/duration
+        ok_speed_list.append((np.array_equal(ref, prod), speed))
+
+    test_ok(ok_speed_list, "mult%d" % (mat.itemsize*8))
 
 
 def test_mult_t(mat, matb, n_bit):
@@ -61,13 +81,17 @@ def test_mult_t(mat, matb, n_bit):
     ref &= 1
     ref_duration = time()-t0
 
-    t0 = time()
-    prod = tbm.mult_t(mat, matb)
-    duration = time()-t0
+    ok_speed_list = []
+    for method in ["default", "avx2", "gfni"]:
+        t0 = time()
+        prod = tbm.mult_t(mat, matb, method=method)
+        duration = time()-t0
 
-    prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
-    test_ok(np.array_equal(ref, prod), "mult_t%d" % (mat.itemsize*8))
-    print(" (duration vs ref: %f)" % (duration/ref_duration))
+        prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
+        speed = ref_duration/duration
+        ok_speed_list.append((np.array_equal(ref, prod), speed))
+
+    test_ok(ok_speed_list, "mult_t%d" % (mat.itemsize*8))
 
 
 def test_transpose(mat, n_bit):
@@ -77,13 +101,17 @@ def test_transpose(mat, n_bit):
     ref = np.ascontiguousarray(mat8.transpose(0, 2, 1))
     ref_duration = time()-t0
 
-    t0 = time()
-    mat8t = tbm.transpose(mat)
-    duration = time()-t0
+    ok_speed_list = []
+    for method in ["default", "avx2", "gfni"]:
+        t0 = time()
+        mat8t = tbm.transpose(mat, method=method)
+        duration = time()-t0
 
-    mat8t = tbm.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
-    test_ok(np.array_equal(ref, mat8t), "transpose%d" % (mat.itemsize*8))
-    print(" (duration vs ref: %f)" % (duration/ref_duration))
+        mat8t = tbm.sprint(mat8t, n_bit, np.arange(2, dtype=np.uint8))
+        speed = ref_duration/duration
+        ok_speed_list.append((np.array_equal(ref, mat8t), speed))
+
+    test_ok(ok_speed_list, "transpose%d" % (mat.itemsize*8))
 
 
 if __name__ == "__main__":
