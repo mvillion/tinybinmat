@@ -1,23 +1,18 @@
 #if !defined(_TINYBITMAT_GFNI)
 #define _TINYBITMAT_GFNI
 //______________________________________________________________________________
-void tbm_transpose8x8_gfni(uint8_t *in, uint64_t n_mat, uint8_t *out);
-void tbm_transpose16x16_gfni(uint16_t *in, uint64_t n_mat, uint16_t *out);
-void tbm_transpose32x32_gfni(uint32_t *in, uint64_t n_mat, uint32_t *out);
+tbm_1arg_int8_fun_t tbm_transpose8x8_gfni;
+tbm_1arg_int16_fun_t tbm_transpose16x16_gfni;
+tbm_1arg_int32_fun_t tbm_transpose32x32_gfni;
 
 //______________________________________________________________________________
-void tbm_mult8x8_gfni(uint8_t *in, uint8_t *in2, uint64_t n_mat, uint8_t *out);
-void tbm_mult16x16_gfni(
-    uint16_t *in, uint16_t *in2, uint64_t n_mat, uint16_t *out);
-void tbm_mult32x32_gfni(
-    uint32_t *in, uint32_t *in2, uint64_t n_mat, uint32_t *out);
+tbm_2arg_int8_fun_t tbm_mult8x8_gfni;
+tbm_2arg_int16_fun_t tbm_mult16x16_gfni;
+tbm_2arg_int32_fun_t tbm_mult32x32_gfni;
 
 //______________________________________________________________________________
-void tbm_mult_t8x8_gfni(
-    uint8_t *in, uint8_t *intb, uint64_t n_mat, uint8_t *out);
-void tbm_mult_t16x16_gfni(
-    uint16_t *in, uint16_t *in2t, uint64_t n_mat, uint16_t *out);
-void tbm_mult_t32x32_gfni(
-    uint32_t *in, uint32_t *in2t, uint64_t n_mat, uint32_t *out);
+tbm_2arg_int8_fun_t tbm_mult_t8x8_gfni;
+tbm_2arg_int16_fun_t tbm_mult_t16x16_gfni;
+tbm_2arg_int32_fun_t tbm_mult_t32x32_gfni;
         
 #endif
