@@ -1,4 +1,5 @@
 #include "tinybinmat.h"
+#include "tinybinmat_avx2.h"
 #include "tinybinmat_gfni.h"
 #include "tinybinmat_utils.h"
 
@@ -88,7 +89,11 @@ static PyObject* tbm_mult_template(
     PyArrayObject *arr_in; //!< 1st array of matrices to multiply
     PyArrayObject *arr_in2; //!< 2nd array of matrices to multiply (transposed)
 
+    bool use_avx2 = true;
     bool use_gfni = true;
+    if (use_gfni)
+        use_avx2 = false;
+    uint8_t i_fun = use_avx2+2*use_gfni+3*is_transposed;
 
     int ok = PyArg_ParseTuple(
         arg, "O!O!", &PyArray_Type, &arr_in, &PyArray_Type, &arr_in2);
@@ -122,14 +127,14 @@ static PyObject* tbm_mult_template(
     arr_in2 = PyArray_GETCONTIGUOUS(arr_in2);
 
     int py_type = PyArray_TYPE(arr_in);
-    uint8_t i_fun = use_gfni+2*is_transposed;
     if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {
         uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
         uint8_t *in2 = (uint8_t *)PyArray_DATA(arr_in2);
         uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_2arg_int8_fun_t *fun[4] = {
-            tbm_mult8x8, tbm_mult8x8_gfni, tbm_mult_t8x8, tbm_mult_t8x8_gfni};
+        tbm_2arg_int8_fun_t *fun[6] = {
+            tbm_mult8x8, tbm_mult8x8_avx2, tbm_mult8x8_gfni, 
+            tbm_mult_t8x8, tbm_mult_t8x8_avx2, tbm_mult_t8x8_gfni};
         fun[i_fun](in, in2, n_mat, out);
     }
     else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
@@ -137,9 +142,9 @@ static PyObject* tbm_mult_template(
         uint16_t *in = (uint16_t *)PyArray_DATA(arr_in);
         uint16_t *in2 = (uint16_t *)PyArray_DATA(arr_in2);
         uint16_t *out = (uint16_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_2arg_int16_fun_t *fun[4] = {
-            tbm_mult16x16, tbm_mult16x16_gfni, tbm_mult_t16x16,
-            tbm_mult_t16x16_gfni};
+        tbm_2arg_int16_fun_t *fun[6] = {
+            tbm_mult16x16, tbm_mult16x16_avx2, tbm_mult16x16_gfni, 
+            tbm_mult_t16x16, tbm_mult_t16x16_avx2, tbm_mult_t16x16_gfni};
         fun[i_fun](in, in2, n_mat, out);
     }
     else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
@@ -147,9 +152,9 @@ static PyObject* tbm_mult_template(
         uint32_t *in = (uint32_t *)PyArray_DATA(arr_in);
         uint32_t *in2 = (uint32_t *)PyArray_DATA(arr_in2);
         uint32_t *out = (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_2arg_int32_fun_t *fun[4] = {
-            tbm_mult32x32, tbm_mult32x32_gfni, tbm_mult_t32x32,
-            tbm_mult_t32x32_gfni};
+        tbm_2arg_int32_fun_t *fun[6] = {
+            tbm_mult32x32, tbm_mult32x32_avx2, tbm_mult32x32_gfni, 
+            tbm_mult_t32x32, tbm_mult_t32x32_avx2, tbm_mult_t32x32_gfni};
         fun[i_fun](in, in2, n_mat, out);
     }
     else
@@ -312,7 +317,11 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
 {
     PyArrayObject *arr_in;
 
+    bool use_avx2 = true;
     bool use_gfni = true;
+    if (use_gfni)
+        use_avx2 = false;
+    uint8_t i_fun = use_avx2+2*use_gfni;
 
     int ok = PyArg_ParseTuple(arg, "O!", &PyArray_Type, &arr_in);
     if (!ok)
@@ -340,28 +349,30 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg)
             "last dimension shall be equal to the number of bits of the type");
 
     int py_type = PyArray_TYPE(arr_in);
-    uint8_t i_fun = use_gfni;
     if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {
         uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
         uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_1arg_int8_fun_t *fun[2] = {tbm_transpose8x8, tbm_transpose8x8_gfni};
+        tbm_1arg_int8_fun_t *fun[3] = {
+            tbm_transpose8x8, tbm_transpose8x8_avx2, tbm_transpose8x8_gfni};
         fun[i_fun](in, n_mat, out);
     }
     else if ((py_type == NPY_INT16) || (py_type == NPY_UINT16))
     {
         uint16_t *in = (uint16_t *)PyArray_DATA(arr_in);
         uint16_t *out = (uint16_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_1arg_int16_fun_t *fun[2] = {
-            tbm_transpose16x16, tbm_transpose16x16_gfni};
+        tbm_1arg_int16_fun_t *fun[3] = {
+            tbm_transpose16x16, tbm_transpose16x16_avx2, 
+            tbm_transpose16x16_gfni};
         fun[i_fun](in, n_mat, out);
     }
     else if ((py_type == NPY_INT32) || (py_type == NPY_UINT32))
     {
         uint32_t *in = (uint32_t *)PyArray_DATA(arr_in);
         uint32_t *out = (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_1arg_int32_fun_t *fun[2] = {
-            tbm_transpose32x32, tbm_transpose32x32_gfni};
+        tbm_1arg_int32_fun_t *fun[3] = {
+            tbm_transpose32x32, tbm_transpose32x32_avx2, 
+            tbm_transpose32x32_gfni};
         fun[i_fun](in, n_mat, out);
     }
     else

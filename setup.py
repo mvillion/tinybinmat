@@ -23,6 +23,7 @@ def src_from_name(name, cflag=None):
 cflag = ["-O3", "-mavx2", "-mgfni"]
 lib_list = [
     ("tinybinmat", src_from_name("tinybinmat", cflag=cflag)),
+    ("tinybinmat_avx2", src_from_name("tinybinmat_avx2", cflag=cflag)),
     ("tinybinmat_gfni", src_from_name("tinybinmat_gfni", cflag=cflag)),
     ("tinybinmat_utils", {"sources": ["tinybinmat_utils.c"]} | inc_dir),
 ]

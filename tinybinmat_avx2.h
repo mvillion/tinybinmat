@@ -1,0 +1,18 @@
+#if !defined(_TINYBITMAT_AVX2)
+#define _TINYBITMAT_AVX2
+//______________________________________________________________________________
+tbm_1arg_int8_fun_t tbm_transpose8x8_avx2;
+tbm_1arg_int16_fun_t tbm_transpose16x16_avx2;
+tbm_1arg_int32_fun_t tbm_transpose32x32_avx2;
+
+//______________________________________________________________________________
+tbm_2arg_int8_fun_t tbm_mult8x8_avx2;
+tbm_2arg_int16_fun_t tbm_mult16x16_avx2;
+tbm_2arg_int32_fun_t tbm_mult32x32_avx2;
+
+//______________________________________________________________________________
+tbm_2arg_int8_fun_t tbm_mult_t8x8_avx2;
+tbm_2arg_int16_fun_t tbm_mult_t16x16_avx2;
+tbm_2arg_int32_fun_t tbm_mult_t32x32_avx2;
+        
+#endif
