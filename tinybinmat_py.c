@@ -1,24 +1,44 @@
 #include "tinybinmat.h"
 #include "tinybinmat_avx2.h"
 #include "tinybinmat_gfni.h"
+#include "tinybinmat_gfnio.h"
 #include "tinybinmat_utils.h"
 
 //______________________________________________________________________________
-static PyObject* tbm_encode(PyObject *self, PyObject *arg)
+static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
 {
     PyArrayObject *arr_in; //!< 1st array of matrices to multiply
+    char *method_str = NULL;
 
-    int ok = PyArg_ParseTuple(arg, "O!", &PyArray_Type, &arr_in);
+    static char *kwlist[] = {"in", "method", NULL};
+    int ok = PyArg_ParseTupleAndKeywords(
+        arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, &method_str);
     if (!ok)
         return failure(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
+
+    bool use_gfnio;
+    if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
+    {
+        use_gfnio = false;
+    }
+    else if (strcmp(method_str, "gfni") == 0)
+    {
+        use_gfnio = true;
+    }
+    else
+        return failure(
+            PyExc_RuntimeError, "method string shall be 'gfni', or 'default'");
 
     int n_dim = PyArray_NDIM(arr_in);
     if (n_dim < 2)
         return failure(PyExc_RuntimeError, "input need at least 2 dimension");
     npy_intp n_bit = PyArray_DIM(arr_in, n_dim-1);
+    npy_intp n_bit_col = PyArray_DIM(arr_in, n_dim-2);
+    uint8_t n_octet_row = (n_bit+7)/8;
+    uint8_t n_octet_col = (n_bit_col+7)/8;
 
-    if (n_bit != PyArray_DIM(arr_in, n_dim-2))
+    if (n_bit != n_bit_col && !use_gfnio)
         return failure(
             PyExc_RuntimeError, "last two dimensions shall be equal");
 
@@ -27,59 +47,95 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg)
         return failure(
             PyExc_RuntimeError, "input type size shall be equal to 1 octet");
 
-    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit/n_bit);
+    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit/n_bit_col);
 
     int py_type;
     uint8_t n_bit_raw;
-    if (n_bit <= 8)
+    int n_dim_out;
+
+    if (use_gfnio)
     {
-        py_type = NPY_UINT8; n_bit_raw = 8;
-    }
-    else if (n_bit <= 16)
-    {
-        py_type = NPY_UINT16; n_bit_raw = 16;
-    }
-    else if (n_bit <= 32)
-    {
-        py_type = NPY_UINT32; n_bit_raw = 32;
+        if (n_bit != 8 && n_bit != 16 && n_bit != 32)
+            return failure(
+                PyExc_RuntimeError,
+                "input type size shall be equal to 8, 16, or 32 bits");
+        py_type = NPY_UINT64;
+        n_dim_out = n_dim;
     }
     else
-        return failure(
-            PyExc_RuntimeError,
-            "input type size shall be equal to 1, 2, or 4 octets");
+    {
+        if ((n_bit < 1) || (32 < n_bit))
+            return failure(
+                PyExc_RuntimeError,
+                "last two dimensions shall be between 1 and 32 bits");
+
+        if (n_bit <= 8)
+        {
+            py_type = NPY_UINT8; n_bit_raw = 8;
+        }
+        else if (n_bit <= 16)
+        {
+            py_type = NPY_UINT16; n_bit_raw = 16;
+        }
+        else if (n_bit <= 32)
+        {
+            py_type = NPY_UINT32; n_bit_raw = 32;
+        }
+        else
+            return failure(
+                PyExc_RuntimeError,
+                "input type size shall be equal to 1, 2, or 4 octets");
+        n_dim_out = n_dim-1;
+      }
 
     // create output dimensions
-    npy_intp *out_dim = (npy_intp *)malloc((n_dim-1)*sizeof(npy_intp));
-    memcpy(out_dim, PyArray_DIMS(arr_in), (n_dim-2)*sizeof(npy_intp));
-    out_dim[n_dim-2] = n_bit_raw;
-    PyObject *arr_out = PyArray_SimpleNew(n_dim-1, out_dim, py_type);
+    npy_intp *out_dim = (npy_intp *)malloc(n_dim_out*sizeof(npy_intp));
+    memcpy(out_dim, PyArray_DIMS(arr_in), (n_dim_out-1)*sizeof(npy_intp));
+    if (use_gfnio)
+    {
+        out_dim[n_dim_out-1] = n_octet_row;
+        out_dim[n_dim_out-2] = n_octet_col;
+    }
+    else
+        out_dim[n_dim-2] = n_bit_raw;
+    PyObject *arr_out = PyArray_SimpleNew(n_dim_out, out_dim, py_type);
 
     // ensure the input array is contiguous.
     // PyArray_GETCONTIGUOUS will increase the reference count.
     arr_in = PyArray_GETCONTIGUOUS(arr_in);
 
     uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
-    if (py_type == NPY_UINT8)
+    if (use_gfnio)
     {
-        tbm_encode8(
-            in, n_mat, n_bit, n_bit_raw,
-            (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out));
+        tbm_encode_gnfio(
+            in, n_mat, n_bit_col, n_bit,  n_octet_col, n_octet_row, 
+            (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out));
     }
-    else if (py_type == NPY_UINT16)
+    else
     {
-        tbm_encode16(
-            in, n_mat, n_bit, n_bit_raw,
-            (uint16_t *)PyArray_DATA((PyArrayObject *)arr_out));
-    }
-    else if (py_type == NPY_UINT32)
-    {
-        tbm_encode32(
-            in, n_mat, n_bit, n_bit_raw,
-            (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out));
+        if (py_type == NPY_UINT8)
+        {
+            tbm_encode8(
+                in, n_mat, n_bit, n_bit_raw,
+                (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out));
+        }
+        else if (py_type == NPY_UINT16)
+        {
+            tbm_encode16(
+                in, n_mat, n_bit, n_bit_raw,
+                (uint16_t *)PyArray_DATA((PyArrayObject *)arr_out));
+        }
+        else if (py_type == NPY_UINT32)
+        {
+            tbm_encode32(
+                in, n_mat, n_bit, n_bit_raw,
+                (uint32_t *)PyArray_DATA((PyArrayObject *)arr_out));
+        }
     }
 
     // decrease the reference count
     Py_DECREF(arr_in);
+    free(out_dim);
     return arr_out;
 }
 
@@ -419,21 +475,21 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
 // set up the methods table
 static PyMethodDef method_def[] = {
     {
-        "encode", tbm_encode, METH_VARARGS,
+        "encode", (PyCFunction)tbm_encode, METH_VARARGS | METH_KEYWORDS,
         "encode a square matrix into a tinybinmat"
     },
     {
-        "mult", (PyCFunction) tbm_mult, METH_VARARGS | METH_KEYWORDS, 
+        "mult", (PyCFunction)tbm_mult, METH_VARARGS | METH_KEYWORDS, 
         "multiply twp tinybinmat matrices"
     },
     {
-        "mult_t", (PyCFunction) tbm_mult_t, METH_VARARGS | METH_KEYWORDS,
+        "mult_t", (PyCFunction)tbm_mult_t, METH_VARARGS | METH_KEYWORDS,
         "multiply a tinybinmat by another transposed tinybinmat"
     },
     {"print", tbm_print, METH_VARARGS, "print tinybinmat"},
     {"sprint", tbm_sprint, METH_VARARGS, "convert to uint8 array"},
     {
-        "transpose", (PyCFunction) tbm_transpose, METH_VARARGS | METH_KEYWORDS, 
+        "transpose", (PyCFunction)tbm_transpose, METH_VARARGS | METH_KEYWORDS, 
         "transpose tinybinmat"
     },
     {NULL, NULL, 0, NULL}

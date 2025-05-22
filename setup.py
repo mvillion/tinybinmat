@@ -25,6 +25,7 @@ lib_list = [
     ("tinybinmat", src_from_name("tinybinmat", cflag=cflag)),
     ("tinybinmat_avx2", src_from_name("tinybinmat_avx2", cflag=cflag)),
     ("tinybinmat_gfni", src_from_name("tinybinmat_gfni", cflag=cflag)),
+    ("tinybinmat_gfnio", src_from_name("tinybinmat_gfnio", cflag=cflag)),
     ("tinybinmat_utils", {"sources": ["tinybinmat_utils.c"]} | inc_dir),
 ]
 
