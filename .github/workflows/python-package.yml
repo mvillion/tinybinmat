@@ -38,6 +38,7 @@ jobs:
     - name: Build tinybinmat
       run: |
         python -m build -w -n
+        python -m pip install ./dist/*.whl
     - name: Test with pytest
       run: |
         pytest
