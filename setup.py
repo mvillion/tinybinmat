@@ -39,7 +39,7 @@ setup(
         Extension(
             name="tinybinmat", sources=["tinybinmat_py.c"],
             extra_compile_args=["-mavx2", "-mgfni"],
-            include_dirs=[os.path.dirname(__file__), numpy.get_include()],
+            include_dirs=[this_file_path, numpy.get_include()],
             libraries=[k[0] for k in lib_list],
         ),
     ],
