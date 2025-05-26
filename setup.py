@@ -4,6 +4,9 @@ import os
 from setuptools import Extension, setup
 from sysconfig import get_paths
 
+print("coucou")
+print(__file__)
+print(os.path.dirname(__file__))
 inc_dir = {
     "include_dirs": [
         os.path.dirname(__file__), numpy.get_include(), get_paths()["include"],
