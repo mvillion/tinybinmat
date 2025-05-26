@@ -4,12 +4,13 @@ import os
 from setuptools import Extension, setup
 from sysconfig import get_paths
 
-print("coucou")
-print(__file__)
-print(os.path.dirname(__file__))
+this_file_path = os.path.dirname(__file__)
+if this_file_path == "":
+    this_file_path = "."
+print("coucou %s" % this_file_path)
 inc_dir = {
     "include_dirs": [
-        os.path.dirname(__file__), numpy.get_include(), get_paths()["include"],
+        this_file_path, numpy.get_include(), get_paths()["include"],
     ]}
 
 
