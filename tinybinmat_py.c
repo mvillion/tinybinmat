@@ -8,27 +8,27 @@
 static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
 {
     PyArrayObject *arr_in; //!< 1st array of matrices to multiply
-    char *method_str = NULL;
+    char *format_str = NULL;
 
-    static char *kwlist[] = {"in", "method", NULL};
+    static char *kwlist[] = {"in", "format", NULL};
     int ok = PyArg_ParseTupleAndKeywords(
-        arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, &method_str);
+        arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, &format_str);
     if (!ok)
         return failure(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
 
     bool use_gfnio;
-    if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
+    if ((format_str == NULL) || (strcmp(format_str, "default") == 0))
     {
         use_gfnio = false;
     }
-    else if (strcmp(method_str, "gfni") == 0)
+    else if (strcmp(format_str, "gfni") == 0)
     {
         use_gfnio = true;
     }
     else
         return failure(
-            PyExc_RuntimeError, "method string shall be 'gfni', or 'default'");
+            PyExc_RuntimeError, "format shall be 'gfni' or 'default'");
 
     int n_dim = PyArray_NDIM(arr_in);
     if (n_dim < 2)
@@ -55,10 +55,6 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
 
     if (use_gfnio)
     {
-        if (n_bit != 8 && n_bit != 16 && n_bit != 32)
-            return failure(
-                PyExc_RuntimeError,
-                "input type size shall be equal to 8, 16, or 32 bits");
         py_type = NPY_UINT64;
         n_dim_out = n_dim;
     }

@@ -40,10 +40,13 @@ def test_ok(ok_list, test_str):
 
 
 def test_encode(mat, n_bit):
-    decode = tbm.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
-    encode = tbm.encode(decode)
+    ok_list = []
+    for format in ["default", "gfni"]:
+        decode = tbm.sprint(mat, n_bit, np.arange(2, dtype=np.uint8))
+        encode = tbm.encode(decode, format=format)
+        ok_list.append((np.array_equal(mat, encode), None))
 
-    test_ok(np.array_equal(mat, encode), "encode%d" % (mat.itemsize*8))
+    test_ok(ok_list, "encode%d" % (mat.itemsize*8))
 
 
 def test_mult(mat, matb, n_bit):
@@ -59,7 +62,7 @@ def test_mult(mat, matb, n_bit):
     prod = tbm.mult(mat, matb)
     duration = time()-t0
 
-    ok_speed_list = []
+    ok_list = []
     for method in ["default", "avx2", "gfni"]:
         t0 = time()
         prod = tbm.mult(mat, matb, method=method)
@@ -67,9 +70,9 @@ def test_mult(mat, matb, n_bit):
 
         prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
         speed = ref_duration/duration
-        ok_speed_list.append((np.array_equal(ref, prod), speed))
+        ok_list.append((np.array_equal(ref, prod), speed))
 
-    test_ok(ok_speed_list, "mult%d" % (mat.itemsize*8))
+    test_ok(ok_list, "mult%d" % (mat.itemsize*8))
 
 
 def test_mult_t(mat, matb, n_bit):
@@ -81,7 +84,7 @@ def test_mult_t(mat, matb, n_bit):
     ref &= 1
     ref_duration = time()-t0
 
-    ok_speed_list = []
+    ok_list = []
     for method in ["default", "avx2", "gfni"]:
         t0 = time()
         prod = tbm.mult_t(mat, matb, method=method)
@@ -89,9 +92,9 @@ def test_mult_t(mat, matb, n_bit):
 
         prod = tbm.sprint(prod, n_bit, np.arange(2, dtype=np.uint8))
         speed = ref_duration/duration
-        ok_speed_list.append((np.array_equal(ref, prod), speed))
+        ok_list.append((np.array_equal(ref, prod), speed))
 
-    test_ok(ok_speed_list, "mult_t%d" % (mat.itemsize*8))
+    test_ok(ok_list, "mult_t%d" % (mat.itemsize*8))
 
 
 def test_transpose(mat, n_bit):

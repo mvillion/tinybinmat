@@ -6,24 +6,24 @@ void tbm_encode_gnfio(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-        uint8_t *in_mat = in + i_mat*n_bit_col*n_bit_row;
-        for (uint8_t i_ocol = 0; i_ocol < i_ocol-1; i_ocol++)
+        uint8_t *in_mat = in + i_mat*n_bit_row*n_bit_col;
+        for (uint8_t i_orow = 0; i_orow < n_octet_row; i_orow++)
         {
-            for (uint8_t i_orow = 0; i_orow < n_octet_row; i_orow++)
+            for (uint8_t i_ocol = 0; i_ocol < n_octet_col; i_ocol++)
             {
                 uint64_t acc = 0;
+                for (uint8_t i_brow = 0; i_brow < 8; i_brow++)
                 for (uint8_t i_bcol = 0; i_bcol < 8; i_bcol++)
                 {
-                    for (uint8_t i_brow = 0; i_brow < 8; i_brow++)
-                    {
-                        uint64_t i_row = 7-i_brow + i_orow*8;
-                        uint64_t i_col = i_bcol + i_ocol*8;
-                        uint8_t bit = in_mat[i_col*n_bit_row+i_row];
-                        acc |= bit;
-                        acc <<= 1;
-                    }
+                    uint64_t i_row = i_brow + i_orow*8;
+                    uint64_t i_col = 7-i_bcol + i_ocol*8;
+                    uint8_t bit = in_mat[i_row*n_bit_col+i_col];
+                    printf("bit = in_mat[%d*%d+%d = %d] = %d\n", 
+                        i_row, n_bit_col, i_col, i_row*n_bit_col+i_col, bit);
+                    acc <<= 1;
+                    acc |= bit;
                 }
-                out[(i_mat*n_octet_col+i_ocol)*n_octet_row+i_orow] = acc;
+                out[(i_mat*n_octet_row+i_orow)*n_octet_col+i_ocol] = acc;
             }
             // uint8_t i_orow = n_octet_row-1;
             // uint64_t acc = 0;
