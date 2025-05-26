@@ -42,4 +42,5 @@ jobs:
         python -m pip install ./dist/*.whl
     - name: Test with pytest
       run: |
-        pytest
+        # pytest
+        python ./test_tbm.py
