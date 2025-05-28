@@ -6,8 +6,8 @@ void tbm_encode_gfnio(
 {
     uint32_t n_octet_col = (n_col+7)/8; //!< number of columns in octets
     uint32_t n_octet_row = (n_row+7)/8; //!< number of rows in octets
-    // uint8_t n_bit_col = n_col % 8; //!< number of last columns in bits
-    // uint8_t n_bit_row = n_row % 8; //!< number of last rows in bits
+    uint8_t n_zero_col = 8*n_octet_col-n_col; //!< number of columns to clear
+    uint8_t n_zero_row = 8*n_octet_row-n_row; //!< number of rows to clear
 
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
@@ -22,14 +22,23 @@ void tbm_encode_gfnio(
                 {
                     uint64_t i_row = i_brow + i_orow*8;
                     uint64_t i_col = 7-i_bcol + i_ocol*8;
-                    uint8_t bit = in_mat[i_row*n_col+i_col];
-                    // printf("bit = in_mat[%d*%d+%d = %d] = %d\n", 
-                    //     i_row, n_bit_col, i_col, i_row*n_bit_col+i_col, bit);
+                    uint8_t bit = in_mat[i_row*n_col+i_col] & 1;
                     acc <<= 1;
                     acc |= bit;
                 }
                 out[(i_mat*n_octet_row+i_orow)*n_octet_col+i_ocol] = acc;
             }
+            // clear unused bits in the last columns
+            uint64_t zero_mask = 0xff >> n_zero_col;
+            zero_mask *= 0x0101010101010101; //!< mask for the last columns
+            out[(i_mat*n_octet_row+i_orow+1)*n_octet_col-1] &= zero_mask;
+        }
+        for (uint8_t i_ocol = 0; i_ocol < n_octet_col; i_ocol++)
+        {
+            // clear unused bits in the last columns
+            uint64_t zero_mask = -1; //!< mask for the last row
+            zero_mask <<= n_zero_row*8; 
+            out[((i_mat+1)*n_octet_row-1)*n_octet_col+i_ocol] &= zero_mask;
         }
     }
 }
