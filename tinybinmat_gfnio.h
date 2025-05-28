@@ -1,10 +1,13 @@
 #if !defined(_TINYBITMAT_GFNIO)
 #define _TINYBITMAT_GFNIO
 
-void tbm_encode_gnfio(
-    uint8_t *in, uint64_t n_mat, uint8_t n_bit_col, uint8_t n_bit_row, 
-    uint8_t n_octet_col, uint8_t n_octet_row, uint64_t *out);
+void tbm_encode_gfnio(
+    uint8_t *in, uint64_t n_mat, uint32_t n_row, uint32_t n_col, uint64_t *out);
 
+void tbm_sprint8_gfnio(
+    uint64_t *mat, uint64_t n_mat, uint32_t n_row, uint32_t n_col, char *str01,
+    uint8_t *out);
+    
 //______________________________________________________________________________
 
 // typedef void tbm_2arg_int8_fun_t(
