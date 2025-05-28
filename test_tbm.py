@@ -41,10 +41,15 @@ def test_ok(ok_list, test_str):
 
 def test_encode(mat, n_bit):
     ok_list = []
-    for format in ["default", "gfni"]:
-        decode = tbm.sprint(mat, n_bit, n_bit, np.arange(2, dtype=np.uint8))
-        encode = tbm.encode(decode, format=format)
-        ok_list.append((np.array_equal(mat, encode), None))
+
+    decode = tbm.sprint(mat, n_bit, n_bit, np.arange(2, dtype=np.uint8))
+    encode = tbm.encode(decode)
+    ok_list.append((np.array_equal(mat, encode), None))
+
+    encode = tbm.encode(decode, fmt="gfni")
+    decode_gfni = tbm.sprint(
+        encode, n_bit, n_bit, np.arange(2, dtype=np.uint8), fmt="gfni")
+    ok_list.append((np.array_equal(decode_gfni, decode), None))
 
     test_ok(ok_list, "encode%d" % (mat.itemsize*8))
 

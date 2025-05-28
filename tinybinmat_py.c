@@ -10,7 +10,7 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
     PyArrayObject *arr_in; //!< 1st array of matrices to multiply
     char *format_str = NULL;
 
-    static char *kwlist[] = {"in", "format", NULL};
+    static char *kwlist[] = {"in", "fmt", NULL};
     int ok = PyArg_ParseTupleAndKeywords(
         arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, &format_str);
     if (!ok)
@@ -305,18 +305,18 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
     uint32_t n_row;
     char *format_str = NULL;
 
-    static char *kwlist[] = {"in", "n_row", "n_col", "str01", "format", NULL};
+    static char *kwlist[] = {"in", "n_row", "n_col", "str01", "fmt", NULL};
     int ok = PyArg_ParseTupleAndKeywords(
         arg, kwarg, "O!IIO!|s", kwlist, &PyArray_Type, &arr_in, &n_row, &n_col, 
         &PyArray_Type, &arr_str01, &format_str);
     if (!ok)
-        return failure(PyExc_RuntimeError, "failed to parse parameters");
+        return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
 
     if (PyArray_TYPE(arr_str01) != NPY_UINT8)
-        return failure(PyExc_RuntimeError, "4th arg must be uint8");
+        return PyErr_Format(PyExc_RuntimeError, "4th arg must be uint8");
     if (PyArray_SIZE(arr_str01) < 2)
-        return failure(
+        return PyErr_Format(
             PyExc_RuntimeError, "4th arg shall have at least 2 characters");
     char *str01 = (char *)PyArray_DATA(arr_str01);
 
@@ -330,7 +330,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
         use_gfnio = true;
     }
     else
-        return failure(
+        return PyErr_Format(
             PyExc_RuntimeError, "format shall be 'gfni' or 'default'");
 
     // create output dimensions
@@ -341,7 +341,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
     if (use_gfnio)
     {
         if (n_dim < 2)
-            return failure(
+            return PyErr_Format(
                 PyExc_RuntimeError, "input need at least 2 dimensiond");
         uint32_t n_octet_col = (n_col+7)/8; //!< number of columns in octets
         uint32_t n_octet_row = (n_row+7)/8; //!< number of rows in octets
@@ -390,7 +390,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
     memcpy(out_dim, PyArray_DIMS(arr_in), n_dim*sizeof(npy_intp));
     out_dim[n_dim_out-2] = n_row;
     out_dim[n_dim_out-1] = n_col;
-    PyObject *arr_out = PyArray_SimpleNew(n_dim+1, out_dim, NPY_UINT8);
+    PyObject *arr_out = PyArray_SimpleNew(n_dim_out, out_dim, NPY_UINT8);
     uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
 
     // ensure the input array is contiguous.
