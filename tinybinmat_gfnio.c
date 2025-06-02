@@ -74,3 +74,76 @@ void tbm_sprint8_gfnio(
         }
     }
 }
+
+//______________________________________________________________________________
+__m256i inline tbm_transpose8x8_m256i_gfni(__m256i in8x8_4)
+{
+    // _mm256_gf2p8affine_epi64_epi8(I, A, 0) is (A*I.T).T = A.T
+    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
+    return _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, in8x8_4, 0);
+}
+
+void tbm_transpose_gfnio_1d(uint64_t *in, uint64_t n8x8, uint64_t *out)
+{
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
+    {
+        // load 4x8x8 blocks
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+        // transpose 4x8x8 blocks
+        __m256i out8x8_4 = tbm_transpose8x8_m256i_gfni(in8x8_4);
+        // store transposed 4x8x8 blocks
+        _mm256_storeu_si256((__m256i *)(out+i8x8), out8x8_4);
+    }
+    if (i8x8 == n8x8)
+        return; // all blocks are processed
+    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+    __m256i out8x8_4 = tbm_transpose8x8_m256i_gfni(in8x8_4);
+    __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
+    mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n8x8-i8x8), mask);
+    _mm256_maskstore_epi64((long long int *)(out+i8x8), mask, out8x8_4);
+}
+
+#pragma GCC push_options //----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
+void tbm_transpose_gfnio(
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
+    uint64_t *out)
+{
+    if (n_row8 == 1 || n_col8 == 1)
+    {
+        // no block transpose needed
+        uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
+        return tbm_transpose_gfnio_1d(in, n8x8, out);
+    }
+
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        uint64_t *in_mat = in + i_mat*n_row8*n_col8;
+        uint64_t *out_mat = out + i_mat*n_col8*n_row8;
+        for (uint32_t i_row = 0; i_row < n_row8; i_row++)
+            for (uint32_t i_col = 0; i_col < n_col8; i_col++)
+                out_mat[i_col*n_row8+i_row] = in_mat[i_row*n_col8+i_col];
+    }
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
+    for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
+    {
+        // load 4x8x8 blocks
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(out+i8x8));
+        // transpose 4x8x8 blocks
+        __m256i out8x8_4 = tbm_transpose8x8_m256i_gfni(in8x8_4);
+        // store transposed 4x8x8 blocks
+        _mm256_storeu_si256((__m256i *)(out+i8x8), out8x8_4);
+    }
+    if (i8x8 == n8x8)
+        return; // all blocks are processed
+    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(out+i8x8));
+    __m256i out8x8_4 = tbm_transpose8x8_m256i_gfni(in8x8_4);
+    __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
+    mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n8x8-i8x8), mask);
+    _mm256_maskstore_epi64((long long int *)(out+i8x8), mask, out8x8_4);
+}
+#pragma GCC pop_options //-----------------------------------------------------
+
+

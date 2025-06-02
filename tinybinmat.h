@@ -11,6 +11,7 @@
 #else
 #define __UNUSED__ __attribute__((unused))
 #endif
+extern void print_avx2_uint64(__m256i reg);
 
 void tbm_encode8(
     uint8_t *in, uint64_t n_mat, uint8_t n_bit, uint8_t n_bit_raw, 

@@ -104,6 +104,7 @@ def test_mult_t(mat, matb, n_bit):
 
 def test_transpose(mat, n_bit):
     mat8 = tbm.sprint(mat, n_bit, n_bit, np.arange(2, dtype=np.uint8))
+    encode = tbm.encode(mat8, fmt="gfni")
 
     t0 = time()
     ref = np.ascontiguousarray(mat8.transpose(0, 2, 1))
@@ -116,6 +117,16 @@ def test_transpose(mat, n_bit):
         duration = time()-t0
 
         mat8t = tbm.sprint(mat8t, n_bit, n_bit, np.arange(2, dtype=np.uint8))
+        speed = ref_duration/duration
+        ok_speed_list.append((np.array_equal(ref, mat8t), speed))
+
+    for method in ["gfnio"]:
+        t0 = time()
+        mat8t = tbm.transpose(encode, method=method)
+        duration = time()-t0
+
+        mat8t = tbm.sprint(
+            mat8t, n_bit, n_bit, np.arange(2, dtype=np.uint8), fmt="gfni")
         speed = ref_duration/duration
         ok_speed_list.append((np.array_equal(ref, mat8t), speed))
 

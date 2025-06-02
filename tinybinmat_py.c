@@ -80,7 +80,7 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
                 PyExc_RuntimeError,
                 "input type size shall be equal to 1, 2, or 4 octets");
         n_dim_out = n_dim-1;
-      }
+    }
 
     // create output dimensions
     npy_intp *out_dim = (npy_intp *)malloc(n_dim_out*sizeof(npy_intp));
@@ -343,16 +343,16 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
         if (n_dim < 2)
             return PyErr_Format(
                 PyExc_RuntimeError, "input need at least 2 dimensiond");
-        uint32_t n_octet_col = (n_col+7)/8; //!< number of columns in octets
-        uint32_t n_octet_row = (n_row+7)/8; //!< number of rows in octets
+        uint32_t n_col8 = (n_col+7)/8; //!< number of columns in octets
+        uint32_t n_row8 = (n_row+7)/8; //!< number of rows in octets
         npy_intp n_octet_col_in = PyArray_DIM(arr_in, n_dim-1);
         npy_intp n_octet_row_in = PyArray_DIM(arr_in, n_dim-2);
-        if (n_octet_col != n_octet_col_in)
+        if (n_col8 != n_octet_col_in)
             return PyErr_Format(
                 PyExc_RuntimeError,
                 "last dimension %d octets does not match n_col %d",
                 n_octet_col_in, n_col);
-        if (n_octet_row != n_octet_row_in)
+        if (n_row8 != n_octet_row_in)
             return PyErr_Format(
                 PyExc_RuntimeError,
                 "last but one dimension %d octets does not match n_row %d",
@@ -398,7 +398,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
     arr_in = PyArray_GETCONTIGUOUS(arr_in);
 
     int py_type = PyArray_TYPE(arr_in);
-    if ((use_gfnio) && (py_type == NPY_UINT64))
+    if (use_gfnio && (py_type == NPY_UINT64))
     {
         tbm_sprint8_gfnio(
             (uint64_t *)PyArray_DATA(arr_in), n_mat, n_row, n_col, str01, out);
@@ -445,9 +445,10 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
         arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, 
         &method_str);
     if (!ok)
-        return failure(PyExc_RuntimeError, "failed to parse parameters");
+        return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
 
+    bool use_gfnio = false;
     uint8_t i_fun = 0;
     if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
     {
@@ -461,33 +462,69 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
     {
         i_fun = 2;
     }
+    else if (strcmp(method_str, "gfnio") == 0)
+    {
+        use_gfnio = true;
+    }
     else
-        return failure(
+        return PyErr_Format(
             PyExc_RuntimeError,
-            "method string shall be 'avx2', 'gfni', or 'default'");
+            "method string shall be 'avx2', 'gfni', 'gfnio', or 'default'");
 
     // create output dimensions
     int n_dim = PyArray_NDIM(arr_in);
-    if (n_dim < 1)
-        return failure(PyExc_RuntimeError, "input need at least 1 dimension");
-    npy_intp n_bit_raw = PyArray_DIM(arr_in, n_dim-1);
+    npy_intp n_mat = PyArray_SIZE(arr_in);
+    int n_dim_out = n_dim;
+    npy_intp n_col8;
+    npy_intp n_row8;
 
-    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit_raw);
+    if (use_gfnio)
+    {
+        if (n_dim < 2)
+            return PyErr_Format(
+                PyExc_RuntimeError, "input need at least 2 dimensiond");
+        n_col8 = PyArray_DIM(arr_in, n_dim-1);
+        n_row8 = PyArray_DIM(arr_in, n_dim-2);
+        n_mat /= n_col8*n_row8;
+    }
+    else
+    {
+        if (n_dim < 1)
+            return PyErr_Format(
+                PyExc_RuntimeError, "input need at least 1 dimension");
+        npy_intp n_bit_raw = PyArray_DIM(arr_in, n_dim-1);
 
-    PyObject *arr_out = PyArray_NewLikeArray(arr_in, NPY_ANYORDER, NULL, 0);
+        n_mat /= n_bit_raw;
+
+        npy_intp size_type = PyArray_ITEMSIZE(arr_in);
+        if (n_bit_raw != 8*size_type)
+            return PyErr_Format(
+                PyExc_RuntimeError,
+                "last dimension shall be equal to the number of bits of the type");
+    }
+
+    npy_intp *out_dim = (npy_intp *)malloc(n_dim_out*sizeof(npy_intp));
+    memcpy(out_dim, PyArray_DIMS(arr_in), n_dim*sizeof(npy_intp));
+    if (use_gfnio)
+    {
+        out_dim[n_dim_out-1] = n_row8;
+        out_dim[n_dim_out-2] = n_col8;
+    }
+    int py_type = PyArray_TYPE(arr_in);
+    PyObject *arr_out = PyArray_SimpleNew(n_dim_out, out_dim, py_type);
 
     // ensure the input array is contiguous.
     // PyArray_GETCONTIGUOUS will increase the reference count.
     arr_in = PyArray_GETCONTIGUOUS(arr_in);
+    free(out_dim);
 
-    npy_intp size_type = PyArray_ITEMSIZE(arr_in);
-    if (n_bit_raw != 8*size_type)
-        return failure(
-            PyExc_RuntimeError,
-            "last dimension shall be equal to the number of bits of the type");
-
-    int py_type = PyArray_TYPE(arr_in);
-    if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
+    if (use_gfnio && (py_type == NPY_UINT64))
+    {
+        uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
+        uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
+        tbm_transpose_gfnio(in, n_mat, n_row8, n_col8, out);
+    }
+    else if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {
         uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
         uint8_t *out = (uint8_t *)PyArray_DATA((PyArrayObject *)arr_out);
@@ -514,7 +551,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
         fun[i_fun](in, n_mat, out);
     }
     else
-        failure(PyExc_RuntimeError, "input type is not supported");
+        PyErr_Format(PyExc_RuntimeError, "input type is not supported");
 
     // decrease the reference count
     Py_DECREF(arr_in);
