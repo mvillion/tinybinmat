@@ -104,6 +104,23 @@ void tbm_transpose_gfnio_1d(uint64_t *in, uint64_t n8x8, uint64_t *out)
     _mm256_maskstore_epi64((long long int *)(out+i8x8), mask, out8x8_4);
 }
 
+void tbm_transpose_gfnio_2x2(uint64_t *in, uint64_t n_mat, uint64_t *out)
+{
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    for (i8x8 = 0; i8x8 < n_mat*4; i8x8 += 4)
+    {
+        // load 4x8x8 blocks
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+        // transpose 4x8x8 blocks
+        __m256i a3210r = tbm_transpose8x8_m256i_gfni(in8x8_4);
+        __m256i a3120r = _mm256_permute4x64_epi64(
+            a3210r, _MM_SHUFFLE(3, 1, 2, 0));
+    
+        // store transposed 4x8x8 blocks
+        _mm256_storeu_si256((__m256i *)(out+i8x8), a3120r);
+    }
+}
+
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_transpose_gfnio(
@@ -115,6 +132,10 @@ void tbm_transpose_gfnio(
         // no block transpose needed
         uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
         return tbm_transpose_gfnio_1d(in, n8x8, out);
+    }
+    else if (n_row8 == 2 && n_col8 == 2)
+    {
+        return tbm_transpose_gfnio_2x2(in, n_mat, out);
     }
 
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
