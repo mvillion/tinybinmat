@@ -104,20 +104,45 @@ void tbm_transpose_gfnio_1d(uint64_t *in, uint64_t n8x8, uint64_t *out)
     _mm256_maskstore_epi64((long long int *)(out+i8x8), mask, out8x8_4);
 }
 
-void tbm_transpose_gfnio_2x2(uint64_t *in, uint64_t n_mat, uint64_t *out)
+void tbm_transpose_gfnio_2x2(__m256i *in, uint64_t n_mat, __m256i *out)
 {
-    uint64_t i8x8; //!< index for 4 8x8 blocks
-    for (i8x8 = 0; i8x8 < n_mat*4; i8x8 += 4)
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
         // load 4x8x8 blocks
-        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+        __m256i in8x8_4 = _mm256_loadu_si256(in+i_mat);
         // transpose 4x8x8 blocks
         __m256i a3210r = tbm_transpose8x8_m256i_gfni(in8x8_4);
         __m256i a3120r = _mm256_permute4x64_epi64(
             a3210r, _MM_SHUFFLE(3, 1, 2, 0));
     
         // store transposed 4x8x8 blocks
-        _mm256_storeu_si256((__m256i *)(out+i8x8), a3120r);
+        _mm256_storeu_si256(out+i_mat, a3120r);
+    }
+}
+
+void tbm_transpose_gfnio_4x4(__m256i *in, uint64_t n_mat, __m256i *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        __m256i in3210 = in[i_mat*4+0];
+        __m256i in7654 = in[i_mat*4+1];
+        __m256i inba98 = in[i_mat*4+2];
+        __m256i infedc = in[i_mat*4+3];
+    
+        __m256i in9810 = _mm256_permute2x128_si256(in3210, inba98, 0x20);
+        __m256i indc54 = _mm256_permute2x128_si256(in7654, infedc, 0x20);
+        __m256i inba32 = _mm256_permute2x128_si256(in3210, inba98, 0x31);
+        __m256i infe76 = _mm256_permute2x128_si256(in7654, infedc, 0x31);
+    
+        __m256i inc840 = _mm256_unpacklo_epi64(in9810, indc54);
+        __m256i ind951 = _mm256_unpackhi_epi64(in9810, indc54);
+        __m256i inea62 = _mm256_unpacklo_epi64(inba32, infe76);
+        __m256i infb73 = _mm256_unpackhi_epi64(inba32, infe76);
+
+        _mm256_storeu_si256(out+i_mat*4+0, tbm_transpose8x8_m256i_gfni(inc840));
+        _mm256_storeu_si256(out+i_mat*4+1, tbm_transpose8x8_m256i_gfni(ind951));
+        _mm256_storeu_si256(out+i_mat*4+2, tbm_transpose8x8_m256i_gfni(inea62));
+        _mm256_storeu_si256(out+i_mat*4+3, tbm_transpose8x8_m256i_gfni(infb73));
     }
 }
 
@@ -135,7 +160,11 @@ void tbm_transpose_gfnio(
     }
     else if (n_row8 == 2 && n_col8 == 2)
     {
-        return tbm_transpose_gfnio_2x2(in, n_mat, out);
+        return tbm_transpose_gfnio_2x2((__m256i *)in, n_mat, (__m256i *)out);
+    }
+    else if (n_row8 == 4 && n_col8 == 4)
+    {
+        return tbm_transpose_gfnio_4x4((__m256i *)in, n_mat, (__m256i *)out);
     }
 
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
