@@ -196,4 +196,70 @@ void tbm_transpose_gfnio(
 }
 #pragma GCC pop_options //-----------------------------------------------------
 
+//______________________________________________________________________________
+__m256i inline tbm_mult_t8x8_m256i_gfnio(__m256i a, __m256i b)
+{
+    // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
+    // _mm256_gf2p8affine_epi64_epi8(A, B, 0) is (B*A.T).T = A*B.T
+    return _mm256_gf2p8affine_epi64_epi8(a, b, 0);
+}
+
+uint64_t inline tbm_dot_t_gfnio(uint64_t *in, uint64_t *in2, uint32_t n_col8)
+{
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    uint64_t n8x8 = n_col8; //!< number of 8x8 blocks
+    __m256i in8x8_4; //!< 4 8x8 blocks from the first matrix
+    __m256i in2_8x8_4; //!< 4 8x8 blocks from the second transposed matrix
+__m256i acc = _mm256_setzero_si256(); //!< accumulator for 4 8x8 blocks
+    for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
+    {
+        // load 4x8x8 blocks
+        in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+        in2_8x8_4 = _mm256_loadu_si256((__m256i *)(in2+i8x8));
+        // transpose 4x8x8 blocks
+        __m256i out8x8_4 = tbm_mult_t8x8_m256i_gfnio(in8x8_4, in2_8x8_4);
+        // store transposed 4x8x8 blocks
+        acc = _mm256_xor_si256(acc, out8x8_4);
+    }
+    if (i8x8 != n8x8)
+    {
+        __m256i mask; //!< mask for the last block
+        mask = _mm256_set_epi64x(3, 2, 1, 0);
+        mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n8x8-i8x8), mask);
+        in8x8_4 = _mm256_maskload_epi64((long long int *)(in+i8x8), mask);
+        in2_8x8_4 = _mm256_maskload_epi64((long long int *)(in2+i8x8), mask);
+        __m256i out8x8_4 = tbm_mult_t8x8_m256i_gfnio(in8x8_4, in2_8x8_4);
+        acc = _mm256_xor_si256(acc, out8x8_4);
+    }
+    __m128i acc128 = _mm256_extracti128_si256(acc, 0);
+    acc128 = _mm_xor_si128(acc128, _mm256_extracti128_si256(acc, 1));
+    return _mm_extract_epi64(acc128, 0) ^ _mm_extract_epi64(acc128, 1);
+}
+
+
+#pragma GCC push_options //-----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
+void tbm_mult_t_gfnio_dot(
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
+    uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        uint64_t *in_mat = in + i_mat*n_row8*n_col8;
+        uint64_t *in2_mat = in + i_mat*n_row8_2*n_col8;
+        uint64_t *out_mat = out + i_mat*n_row8*n_row8_2;
+        for (uint32_t i_row = 0; i_row < n_row8; i_row++)
+            for (uint32_t i_row2 = 0; i_row2 < n_row8_2; i_row2++)
+                out_mat[i_row*n_row8_2+i_row2] = tbm_dot_t_gfnio(
+                    in_mat+i_row*n_col8, in2_mat+i_row2*n_col8, n_col8);
+    }
+}
+
+void tbm_mult_t_gfnio(
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
+    uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
+{
+    tbm_mult_t_gfnio_dot(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
+}
+#pragma GCC pop_options //------------------------------------------------------
 

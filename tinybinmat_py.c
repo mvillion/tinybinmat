@@ -4,6 +4,33 @@
 #include "tinybinmat_gfnio.h"
 #include "tinybinmat_utils.h"
 
+
+uint8_t parse_method_str(const char *method_str, bool *use_gfnio)
+{
+    uint8_t i_fun;
+    *use_gfnio = false;
+    if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
+    {
+        i_fun = 0;
+    }
+    else if (strcmp(method_str, "avx2") == 0)
+    {
+        i_fun = 1;
+    }
+    else if (strcmp(method_str, "gfni") == 0)
+    {
+        i_fun = 2;
+    }
+    else if (strcmp(method_str, "gfnio") == 0)
+    {
+        i_fun = 2;
+        *use_gfnio = true;
+    }
+    else
+        i_fun = 0xff;
+    return i_fun;    
+}
+
 //______________________________________________________________________________
 static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
 {
@@ -145,55 +172,102 @@ static PyObject* tbm_mult_template(
         arg, kwarg, "O!O!|s", kwlist, &PyArray_Type, &arr_in, 
         &PyArray_Type, &arr_in2, &method_str);
     if (!ok)
-        return failure(PyExc_RuntimeError, "failed to parse parameters");
+        return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
 
-    uint8_t i_fun = 0;
-    if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
-    {
-        i_fun = 0;
-    }
-    else if (strcmp(method_str, "avx2") == 0)
-    {
-        i_fun = 1;
-    }
-    else if (strcmp(method_str, "gfni") == 0)
-    {
-        i_fun = 2;
-    }
-    else
-        return failure(
+    bool use_gfnio;
+    uint8_t i_fun = parse_method_str(method_str, &use_gfnio);
+    if (i_fun == 0xff)
+        return PyErr_Format(
             PyExc_RuntimeError,
-            "method string shall be 'avx2', 'gfni', or 'default'");
+            "method string shall be 'avx2', 'gfni', 'gfnio', or 'default'");
     i_fun += is_transposed ? 3 : 0;
 
-    int n_dim = PyArray_NDIM(arr_in);
-    if (n_dim < 1)
-        return failure(PyExc_RuntimeError, "input need at least 1 dimension");
-    npy_intp n_bit_raw = PyArray_DIM(arr_in, n_dim-1);
-
-    npy_intp size_type = PyArray_ITEMSIZE(arr_in);
-    if (n_bit_raw != 8*size_type)
-        return failure(
-            PyExc_RuntimeError,
-            "last dimension shall be equal to the number of bits of the type");
-
-    if (PyArray_NBYTES(arr_in2) != PyArray_NBYTES(arr_in))
-        return failure(
-            PyExc_RuntimeError, "two arrays shall have the same size");
-
-    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_bit_raw);
-
     // create output dimensions
-    PyObject *arr_out = PyArray_NewLikeArray(arr_in, NPY_ANYORDER, NULL, 0);
+    int n_dim = PyArray_NDIM(arr_in);
+    int n_dim2 = PyArray_NDIM(arr_in);
+    npy_intp n_mat = PyArray_SIZE(arr_in);
+    npy_intp n_mat2 = PyArray_SIZE(arr_in2);
+    int n_dim_out = n_dim;
+    npy_intp n_col8;
+    npy_intp n_row8;
+    npy_intp n_col8_2;
+    npy_intp n_row8_2;
+
+    if (use_gfnio)
+    {
+        if ((n_dim < 2) || (n_dim2 < 2))
+            return PyErr_Format(
+                PyExc_RuntimeError, "input need at least 2 dimensions");
+        n_col8 = PyArray_DIM(arr_in, n_dim-1);
+        n_row8 = PyArray_DIM(arr_in, n_dim-2);
+        n_col8_2 = PyArray_DIM(arr_in2, n_dim-1);
+        n_row8_2 = PyArray_DIM(arr_in2, n_dim-2);
+        n_mat /= n_col8*n_row8;
+        n_mat2 /= n_col8_2*n_row8_2;
+
+        if (is_transposed && (n_col8 != n_col8_2))
+        {
+            return PyErr_Format(
+                PyExc_RuntimeError,
+                "first matrix number of columns (%d) shall be equal to "
+                "the second matrix number of columns (%d) when transposed",
+                n_col8, n_col8_2);
+        }
+        else if (!is_transposed && (n_col8 != n_row8_2))
+        {
+            return PyErr_Format(
+                PyExc_RuntimeError,
+                "first matrix number of columns (%d) shall be equal to "
+                "the second matrix number of rows (%d)", n_col8, n_row8_2);
+        }
+    }
+    else
+    {
+        if (n_dim < 1)
+            return PyErr_Format(
+                PyExc_RuntimeError, "input need at least 1 dimension");
+        npy_intp n_bit_raw = PyArray_DIM(arr_in, n_dim-1);
+    
+        npy_intp size_type = PyArray_ITEMSIZE(arr_in);
+        if (n_bit_raw != 8*size_type)
+            return PyErr_Format(
+                PyExc_RuntimeError,
+                "last dimension %d shall be the number of bits of the type %d",
+                n_bit_raw, 8*size_type);
+    
+        n_mat /= n_bit_raw;
+        n_mat2 /= n_bit_raw;
+    }
+    if (n_mat != n_mat2)
+    return PyErr_Format(
+        PyExc_RuntimeError, "two arrays shall have the same size");
+
+    npy_intp *out_dim = (npy_intp *)malloc(n_dim_out*sizeof(npy_intp));
+    memcpy(out_dim, PyArray_DIMS(arr_in), n_dim*sizeof(npy_intp));
+    if (use_gfnio)
+    {
+        out_dim[n_dim_out-1] = is_transposed ? n_row8_2 : n_col8_2;
+        out_dim[n_dim_out-2] = n_row8;
+    }
+    int py_type = PyArray_TYPE(arr_in);
+    PyObject *arr_out = PyArray_SimpleNew(n_dim_out, out_dim, py_type);
 
     // ensure the input array is contiguous.
     // PyArray_GETCONTIGUOUS will increase the reference count.
     arr_in = PyArray_GETCONTIGUOUS(arr_in);
     arr_in2 = PyArray_GETCONTIGUOUS(arr_in2);
+    free(out_dim);
 
-    int py_type = PyArray_TYPE(arr_in);
-    if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
+    if (use_gfnio && (py_type == NPY_UINT64))
+    {
+        uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
+        uint64_t *in2 = (uint64_t *)PyArray_DATA(arr_in2);
+        uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
+        if (is_transposed)
+            tbm_mult_t_gfnio(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
+    }
+    else if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {
         uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
         uint8_t *in2 = (uint8_t *)PyArray_DATA(arr_in2);
@@ -448,25 +522,9 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
         return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
 
-    bool use_gfnio = false;
-    uint8_t i_fun = 0;
-    if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
-    {
-        i_fun = 0;
-    }
-    else if (strcmp(method_str, "avx2") == 0)
-    {
-        i_fun = 1;
-    }
-    else if (strcmp(method_str, "gfni") == 0)
-    {
-        i_fun = 2;
-    }
-    else if (strcmp(method_str, "gfnio") == 0)
-    {
-        use_gfnio = true;
-    }
-    else
+    bool use_gfnio;
+    uint8_t i_fun = parse_method_str(method_str, &use_gfnio);
+    if (i_fun == 0xff)
         return PyErr_Format(
             PyExc_RuntimeError,
             "method string shall be 'avx2', 'gfni', 'gfnio', or 'default'");
