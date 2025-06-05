@@ -271,23 +271,55 @@ void inline tbm_mult32x32_m256i_gfnio(__m256i a[4], __m256i b[4])
     }
 }
 
-#pragma GCC push_options //-----------------------------------------------------
-#pragma GCC optimize("no-tree-vectorize")
 void inline tbm_mult_gfnio_256(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
+    __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
+    mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_col8_2-n_col8_2/4*4), mask);
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-        // uint64_t *in_mat = in + i_mat*n_row8*n_col8;
-        // uint64_t *in2_mat = in2 + i_mat*n_col8_2*n_col8;
-        // uint64_t *out_mat = out + i_mat*n_row8*n_row8_2;
-        // for (uint32_t i_row = 0; i_row < n_row8; i_row++)
-        //     for (uint32_t i_row2 = 0; i_row2 < n_col8_2; i_row2++)
-        //         out_mat[i_row*n_row8_2+i_row2] = 0;
+        uint64_t *in_mat = in + i_mat*n_row8*n_col8;
+        uint64_t *in2_mat = in2 + i_mat*n_col8*n_col8_2;
+        uint64_t *out_mat = out + i_mat*n_row8*n_col8_2;
+        uint32_t i_row; //!< index of output row
+        __m256i repeat; //!< value repeated 4 times for multiplication
+        for (i_row = 0; i_row < n_row8; i_row++)
+        {
+            uint32_t i_col; //!< index of output colum
+            for (i_col = 0; i_col < n_col8_2/4*4; i_col += 4)
+            {
+                __m256i acc = _mm256_setzero_si256();
+                for (uint32_t i_dot = 0; i_dot < n_col8; i_dot++)
+                {
+                    repeat = _mm256_set1_epi64x(in_mat[i_row*n_col8+i_dot]);
+                    __m256i b_8x8_4 = _mm256_loadu_si256(
+                        (__m256i *)(in2_mat+i_dot*n_col8_2+i_col));
+                    acc = _mm256_xor_si256(
+                        acc, tbm_mult8x8_m256i_gfnio(repeat, b_8x8_4));
+                }
+                _mm256_storeu_si256(
+                    (__m256i *)(out_mat+i_row*n_col8_2+i_col), acc);
+            }
+            if (i_col == n_col8_2)
+                continue; // all blocks are processed
+            __m256i acc = _mm256_setzero_si256();
+            for (uint32_t i_dot = 0; i_dot < n_col8; i_dot++)
+            {
+                repeat = _mm256_set1_epi64x(in_mat[i_row*n_col8+i_dot]);
+                __m256i b_8x8_4 = _mm256_loadu_si256(
+                    (__m256i *)(in2_mat+i_dot*n_col8_2+i_col));
+                acc = _mm256_xor_si256(
+                    acc, tbm_mult8x8_m256i_gfnio(repeat, b_8x8_4));
+            }
+            _mm256_maskstore_epi64(
+                (long long int *)(out_mat+i_row*n_col8_2+i_col), mask, acc);
+        }
     }
 }
 
+#pragma GCC push_options //-----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
 void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
@@ -482,8 +514,6 @@ void inline tbm_mult_t32x32_m256i_gfnio(__m256i a[4], __m256i b[4])
     }
 }
 
-#pragma GCC push_options //-----------------------------------------------------
-#pragma GCC optimize("no-tree-vectorize")
 void inline tbm_mult_t_gfnio_dot(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
@@ -500,6 +530,8 @@ void inline tbm_mult_t_gfnio_dot(
     }
 }
 
+#pragma GCC push_options //-----------------------------------------------------
+#pragma GCC optimize("no-tree-vectorize")
 void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
