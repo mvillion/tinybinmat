@@ -236,6 +236,23 @@ __m256i acc = _mm256_setzero_si256(); //!< accumulator for 4 8x8 blocks
     return _mm_extract_epi64(acc128, 0) ^ _mm_extract_epi64(acc128, 1);
 }
 
+__m256i inline tbm_mult_t16x16_m256i_gfnio(__m256i a3210, __m256i b3210)
+{
+    // a is:    b.T is:
+    // [0, 1]   [0, 2]   [0, 0]   [0, 2]   [1, 1]   [1, 3]
+    // [2, 3] @ [1, 3] = [2, 2] * [0, 2] + [3, 3] * [1, 3]
+    __m256i a3311 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 1, 1));
+    __m256i a2200 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 0, 0));
+    __m256i b3131 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(3, 1, 3, 1));
+    __m256i b2020 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(2, 0, 2, 0));
+
+    __m256i out = _mm256_xor_si256(
+        _mm256_gf2p8affine_epi64_epi8(a3311, b3131, 0),
+        _mm256_gf2p8affine_epi64_epi8(a2200, b2020, 0));
+
+    return out;
+}
+
 void inline tbm_mult_t32x32_m256i_gfnio(__m256i a[4], __m256i b[4])
 {
     __m256i b_3210 = b[0];
@@ -310,10 +327,23 @@ void __attribute__ ((noinline)) tbm_mult_t_gfnio_dot_ncol8_1(
     tbm_mult_t_gfnio_dot(in, n_mat, 1, 1, in2, 1, out);
 }
 
-void __attribute__ ((noinline)) tbm_mult_t_gfnio_dot_ncol8_2(
+void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_2(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
+#if defined(USE_DOT)
     tbm_mult_t_gfnio_dot(in, n_mat, 2, 2, in2, 2, out);
+#else
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        __m256i in16X16 = _mm256_loadu_si256((__m256i *)in);
+        __m256i in2_16X16 = _mm256_loadu_si256((__m256i *)in2);
+        _mm256_storeu_si256(
+            (__m256i *)out, tbm_mult_t16x16_m256i_gfnio(in16X16, in2_16X16));
+        in += 4;
+        in2 += 4;
+        out += 4;
+    }
+#endif
 }
 
 void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_4(
@@ -348,7 +378,7 @@ void tbm_mult_t_gfnio(
     if ((n_col8 == 1) && (n_row8 == 1) && (n_row8_2 == 1))
         return tbm_mult_t_gfnio_dot_ncol8_1(in, n_mat, in2, out);
     if ((n_col8 == 2) && (n_row8 == 2) && (n_row8_2 == 2))
-        return tbm_mult_t_gfnio_dot_ncol8_2(in, n_mat, in2, out);
+        return tbm_mult_t_gfnio_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
         return tbm_mult_t_gfnio_ncol8_4(in, n_mat, in2, out);
     

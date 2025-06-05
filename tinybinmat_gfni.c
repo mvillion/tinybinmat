@@ -483,7 +483,6 @@ void tbm_mult_t8x8_gfni(
     uint8_t *in, uint8_t *in2t, uint64_t n_mat, uint8_t *out)
 {
     uint64_t i_avx2 = 0;
-#if defined(USE_AVX2)
     i_avx2 = n_mat/4*4;
     for (uint64_t i_mat = 0; i_mat < i_avx2; i_mat += 4)
     {
@@ -495,7 +494,6 @@ void tbm_mult_t8x8_gfni(
         in2t += 8*4;
         out += 8*4;
     }
-#endif
     for (uint64_t i_mat = i_avx2; i_mat < n_mat; i_mat++)
     {
         *((uint64_t *)out) = tbm_mult_t8x8_uint64(*((uint64_t *)in), in2t);
