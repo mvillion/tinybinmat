@@ -206,17 +206,17 @@ __m256i inline tbm_mult8x8_m256i_gfnio(__m256i a, __m256i b)
 
 __m256i inline tbm_mult16x16_m256i_gfnio(__m256i a3210, __m256i b3210)
 {
-    // a is:    b.T is:
-    // [0, 1]   [0, 2]   [0, 0]   [0, 2]   [1, 1]   [1, 3]
-    // [2, 3] @ [1, 3] = [2, 2] * [0, 2] + [3, 3] * [1, 3]
+    // a is:    b is:
+    // [0, 1]   [0, 1]   [0, 0]   [0, 1]   [1, 1]   [2, 3]
+    // [2, 3] @ [2, 3] = [2, 2] * [0, 1] + [3, 3] * [2, 3]
     __m256i a3311 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 1, 1));
     __m256i a2200 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 0, 0));
-    __m256i b3131 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(3, 1, 3, 1));
-    __m256i b2020 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(2, 0, 2, 0));
+    __m256i b3232 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(3, 2, 3, 2));
+    __m256i b1010 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(1, 0, 1, 0));
 
     __m256i out = _mm256_xor_si256(
-        _mm256_gf2p8affine_epi64_epi8(a3311, b3131, 0),
-        _mm256_gf2p8affine_epi64_epi8(a2200, b2020, 0));
+        tbm_mult8x8_m256i_gfnio(a3311, b3232),
+        tbm_mult8x8_m256i_gfnio(a2200, b1010));
 
     return out;
 }
@@ -372,8 +372,8 @@ void tbm_mult_gfnio(
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_col8_2 == 1))
         return tbm_mult_gfnio_ncol8_1(in, n_mat, in2, out);
-    // if ((n_col8 == 2) && (n_row8 == 2) && (n_col8_2 == 2))
-    //     return tbm_mult_t_gfnio_ncol8_2(in, n_mat, in2, out);
+    if ((n_col8 == 2) && (n_row8 == 2) && (n_col8_2 == 2))
+        return tbm_mult_gfnio_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_col8_2 == 4))
         return tbm_mult_gfnio_ncol8_4(in, n_mat, in2, out);
     
