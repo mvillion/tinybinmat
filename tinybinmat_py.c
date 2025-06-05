@@ -264,6 +264,8 @@ static PyObject* tbm_mult_template(
         uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
         if (is_transposed)
             tbm_mult_t_gfnio(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
+        else
+            tbm_mult_gfnio(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
     }
     else if ((py_type == NPY_INT8) || (py_type == NPY_UINT8))
     {

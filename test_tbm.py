@@ -56,7 +56,9 @@ def test_encode(mat, n_bit):
 
 def test_mult(mat, matb, n_bit):
     mat8 = tbm.sprint(mat, n_bit, n_bit, np.arange(2, dtype=np.uint8))
+    encode = tbm.encode(mat8, fmt="gfni")
     matb8 = tbm.sprint(matb, n_bit, n_bit, np.arange(2, dtype=np.uint8))
+    encodeb = tbm.encode(matb8, fmt="gfni")
 
     t0 = time()
     ref = mat8 @ matb8
@@ -74,6 +76,16 @@ def test_mult(mat, matb, n_bit):
         duration = time()-t0
 
         prod = tbm.sprint(prod, n_bit, n_bit, np.arange(2, dtype=np.uint8))
+        speed = ref_duration/duration
+        ok_list.append((np.array_equal(ref, prod), speed))
+
+    for method in ["gfnio"]:
+        t0 = time()
+        prod = tbm.mult(encode, encodeb, method=method)
+        duration = time()-t0
+
+        prod = tbm.sprint(
+            prod, n_bit, n_bit, np.arange(2, dtype=np.uint8), fmt="gfni")
         speed = ref_duration/duration
         ok_list.append((np.array_equal(ref, prod), speed))
 
