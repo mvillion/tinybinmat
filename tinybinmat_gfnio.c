@@ -321,10 +321,32 @@ void inline tbm_mult_t_gfnio_dot(
     }
 }
 
-void __attribute__ ((noinline)) tbm_mult_t_gfnio_dot_ncol8_1(
+void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
+#if defined(USE_DOT)
     tbm_mult_t_gfnio_dot(in, n_mat, 1, 1, in2, 1, out);
+#else
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    for (i8x8 = 0; i8x8 < n_mat/4*4; i8x8 += 4)
+    {
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+        __m256i in2_8x8_4 = _mm256_loadu_si256((__m256i *)(in2+i8x8));
+        _mm256_storeu_si256(
+            (__m256i *)(out+i8x8),
+            tbm_mult_t8x8_m256i_gfnio(in8x8_4, in2_8x8_4));
+    }
+
+    if (i8x8 == n_mat)
+        return; // all blocks are processed
+    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+    __m256i in2_8x8_4 = _mm256_loadu_si256((__m256i *)(in2+i8x8));
+    __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
+    mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_mat-i8x8), mask);
+    _mm256_maskstore_epi64(
+        (long long int *)(out+i8x8), mask, 
+        tbm_mult_t8x8_m256i_gfnio(in8x8_4, in2_8x8_4));
+#endif
 }
 
 void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_2(
@@ -376,7 +398,7 @@ void tbm_mult_t_gfnio(
     uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_row8_2 == 1))
-        return tbm_mult_t_gfnio_dot_ncol8_1(in, n_mat, in2, out);
+        return tbm_mult_t_gfnio_ncol8_1(in, n_mat, in2, out);
     if ((n_col8 == 2) && (n_row8 == 2) && (n_row8_2 == 2))
         return tbm_mult_t_gfnio_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
