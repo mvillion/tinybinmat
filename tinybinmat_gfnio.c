@@ -124,10 +124,10 @@ void tbm_transpose_gfnio_4x4(__m256i *in, uint64_t n_mat, __m256i *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-        __m256i in3210 = in[i_mat*4+0];
-        __m256i in7654 = in[i_mat*4+1];
-        __m256i inba98 = in[i_mat*4+2];
-        __m256i infedc = in[i_mat*4+3];
+        __m256i in3210 = _mm256_loadu_si256(in+i_mat*4+0);
+        __m256i in7654 = _mm256_loadu_si256(in+i_mat*4+1);
+        __m256i inba98 = _mm256_loadu_si256(in+i_mat*4+2);
+        __m256i infedc = _mm256_loadu_si256(in+i_mat*4+3);
     
         __m256i in9810 = _mm256_permute2x128_si256(in3210, inba98, 0x20);
         __m256i indc54 = _mm256_permute2x128_si256(in7654, infedc, 0x20);
@@ -236,17 +236,16 @@ __m256i acc = _mm256_setzero_si256(); //!< accumulator for 4 8x8 blocks
     return _mm_extract_epi64(acc128, 0) ^ _mm_extract_epi64(acc128, 1);
 }
 
-
 #pragma GCC push_options //-----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
-void tbm_mult_t_gfnio_dot(
+void inline tbm_mult_t_gfnio_dot(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
         uint64_t *in_mat = in + i_mat*n_row8*n_col8;
-        uint64_t *in2_mat = in + i_mat*n_row8_2*n_col8;
+        uint64_t *in2_mat = in2 + i_mat*n_row8_2*n_col8;
         uint64_t *out_mat = out + i_mat*n_row8*n_row8_2;
         for (uint32_t i_row = 0; i_row < n_row8; i_row++)
             for (uint32_t i_row2 = 0; i_row2 < n_row8_2; i_row2++)
@@ -255,10 +254,35 @@ void tbm_mult_t_gfnio_dot(
     }
 }
 
+void __attribute__ ((noinline)) tbm_mult_t_gfnio_dot_ncol8_1(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+    tbm_mult_t_gfnio_dot(in, n_mat, 1, 1, in2, 1, out);
+}
+
+void __attribute__ ((noinline)) tbm_mult_t_gfnio_dot_ncol8_2(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+    tbm_mult_t_gfnio_dot(in, n_mat, 2, 2, in2, 2, out);
+}
+
+void __attribute__ ((noinline)) tbm_mult_t_gfnio_dot_ncol8_4(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+    tbm_mult_t_gfnio_dot(in, n_mat, 4, 4, in2, 4, out);
+}
+
 void tbm_mult_t_gfnio(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
 {
+    if ((n_col8 == 1) && (n_row8 == 1) && (n_row8_2 == 1))
+        return tbm_mult_t_gfnio_dot_ncol8_1(in, n_mat, in2, out);
+    if ((n_col8 == 2) && (n_row8 == 2) && (n_row8_2 == 2))
+        return tbm_mult_t_gfnio_dot_ncol8_2(in, n_mat, in2, out);
+    if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
+        return tbm_mult_t_gfnio_dot_ncol8_4(in, n_mat, in2, out);
+    
     tbm_mult_t_gfnio_dot(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
 }
 #pragma GCC pop_options //------------------------------------------------------

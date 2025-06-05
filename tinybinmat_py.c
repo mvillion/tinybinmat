@@ -7,7 +7,7 @@
 
 uint8_t parse_method_str(const char *method_str, bool *use_gfnio)
 {
-    uint8_t i_fun;
+    uint8_t i_fun = 0xff;
     *use_gfnio = false;
     if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
     {
@@ -26,8 +26,6 @@ uint8_t parse_method_str(const char *method_str, bool *use_gfnio)
         i_fun = 2;
         *use_gfnio = true;
     }
-    else
-        i_fun = 0xff;
     return i_fun;    
 }
 
@@ -189,10 +187,10 @@ static PyObject* tbm_mult_template(
     npy_intp n_mat = PyArray_SIZE(arr_in);
     npy_intp n_mat2 = PyArray_SIZE(arr_in2);
     int n_dim_out = n_dim;
-    npy_intp n_col8;
-    npy_intp n_row8;
-    npy_intp n_col8_2;
-    npy_intp n_row8_2;
+    npy_intp n_col8 = 1;
+    npy_intp n_row8 = 1;
+    npy_intp n_col8_2 = 1;
+    npy_intp n_row8_2 = 1;
 
     if (use_gfnio)
     {
@@ -533,8 +531,8 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
     int n_dim = PyArray_NDIM(arr_in);
     npy_intp n_mat = PyArray_SIZE(arr_in);
     int n_dim_out = n_dim;
-    npy_intp n_col8;
-    npy_intp n_row8;
+    npy_intp n_col8 = 1;
+    npy_intp n_row8 = 1;
 
     if (use_gfnio)
     {
