@@ -204,6 +204,28 @@ __m256i inline tbm_mult8x8_m256i_gfnio(__m256i a, __m256i b)
     return _mm256_gf2p8affine_epi64_epi8(a, tbm_transpose8x8_m256i_gfni(b), 0);
 }
 
+typedef void tbm_mult8x8_1x4_fun_t(uint64_t a, uint64_t b[4], uint64_t out[4]);
+typedef void tbm_mult8x8_x4_fun_t(
+    uint64_t a[4], uint64_t b[4], uint64_t out[4]);
+    
+void inline tbm_mult8x8_1x4_gfnio(uint64_t a, uint64_t b[4], uint64_t out[4])
+{
+    // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
+    // _mm256_gf2p8affine_epi64_epi8(A, B.T, 0) is (B.T*A.T).T = A*B
+    __m256i _a = _mm256_set1_epi64x(a);
+    __m256i _b = _mm256_loadu_si256((__m256i *)b);
+    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i_gfnio(_a, _b)); 
+}
+
+void inline tbm_mult8x8_x4_gfnio(uint64_t a[4], uint64_t b[4], uint64_t out[4])
+{
+    // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
+    // _mm256_gf2p8affine_epi64_epi8(A, B.T, 0) is (B.T*A.T).T = A*B
+    __m256i _a = _mm256_loadu_si256((__m256i *)a);
+    __m256i _b = _mm256_loadu_si256((__m256i *)b);
+    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i_gfnio(_a, _b)); 
+}
+
 __m256i inline tbm_mult16x16_m256i_gfnio(__m256i a3210, __m256i b3210)
 {
     // a is:    b is:
@@ -245,9 +267,10 @@ void inline tbm_mult32x32_m256i_gfnio(__m256i a[4], __m256i b[4])
     }
 }
 
-void inline tbm_mult_gfnio_256(
+void inline tbm_mult_256_template(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
-    uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
+    uint64_t *in2, uint32_t n_col8_2, uint64_t *out, 
+    tbm_mult8x8_1x4_fun_t *mult1x4_fun)
 {
     __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
     mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_col8_2-n_col8_2/4*4), mask);
@@ -257,43 +280,52 @@ void inline tbm_mult_gfnio_256(
         uint64_t *in2_mat = in2 + i_mat*n_col8*n_col8_2;
         uint64_t *out_mat = out + i_mat*n_row8*n_col8_2;
         uint32_t i_row; //!< index of output row
-        __m256i repeat; //!< value repeated 4 times for multiplication
         for (i_row = 0; i_row < n_row8; i_row++)
         {
             uint32_t i_col; //!< index of output colum
             for (i_col = 0; i_col < n_col8_2/4*4; i_col += 4)
             {
-                __m256i acc = _mm256_setzero_si256();
+                uint64_t acc[4] = {0, 0, 0, 0};
                 for (uint32_t i_dot = 0; i_dot < n_col8; i_dot++)
                 {
-                    repeat = _mm256_set1_epi64x(in_mat[i_row*n_col8+i_dot]);
-                    __m256i b_8x8_4 = _mm256_loadu_si256(
-                        (__m256i *)(in2_mat+i_dot*n_col8_2+i_col));
-                    acc = _mm256_xor_si256(
-                        acc, tbm_mult8x8_m256i_gfnio(repeat, b_8x8_4));
+                    uint64_t prod[4];
+                    mult1x4_fun(
+                        in_mat[i_row*n_col8+i_dot], 
+                        in2_mat+i_dot*n_col8_2+i_col, prod);
+                    for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
+                        acc[i_prod] ^= prod[i_prod];
                 }
-                _mm256_storeu_si256(
-                    (__m256i *)(out_mat+i_row*n_col8_2+i_col), acc);
+                for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
+                    out_mat[i_row*n_col8_2+i_col+i_prod] = acc[i_prod];
             }
             if (i_col == n_col8_2)
                 continue; // all blocks are processed
-            __m256i acc = _mm256_setzero_si256();
+            uint64_t acc[4] = {0, 0, 0, 0};
             for (uint32_t i_dot = 0; i_dot < n_col8; i_dot++)
             {
-                repeat = _mm256_set1_epi64x(in_mat[i_row*n_col8+i_dot]);
-                __m256i b_8x8_4 = _mm256_loadu_si256(
-                    (__m256i *)(in2_mat+i_dot*n_col8_2+i_col));
-                acc = _mm256_xor_si256(
-                    acc, tbm_mult8x8_m256i_gfnio(repeat, b_8x8_4));
+                uint64_t prod[4];
+                mult1x4_fun(
+                    in_mat[i_row*n_col8+i_dot], 
+                    in2_mat+i_dot*n_col8_2+i_col, prod);
+                for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
+                    acc[i_prod] ^= prod[i_prod];
             }
-            _mm256_maskstore_epi64(
-                (long long int *)(out_mat+i_row*n_col8_2+i_col), mask, acc);
+            for (uint8_t i_prod = 0; i_prod < (n_col8_2 & 3); i_prod++)
+                out_mat[i_row*n_col8_2+i_col+i_prod] = acc[i_prod];
         }
     }
 }
 
 #pragma GCC push_options //-----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
+void tbm_mult_gfnio_256(
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
+    uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
+{
+    tbm_mult_256_template(
+        in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_mult8x8_1x4_gfnio);
+}
+
 void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
