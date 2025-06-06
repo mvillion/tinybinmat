@@ -316,61 +316,6 @@ static PyObject* tbm_mult_t(PyObject *self, PyObject *arg, PyObject *kwarg)
     return tbm_mult_template(self, arg, kwarg, true);
 }
 
-static PyObject* tbm_print(PyObject *self, PyObject *arg)
-{
-    PyArrayObject *arr_in;
-    char *str01; //!< two characters for 0 and 1
-    uint32_t n_bit;
-
-    int ok = PyArg_ParseTuple(
-        arg, "O!Is", &PyArray_Type, &arr_in, &n_bit, &str01);
-    if (!ok)
-        return failure(PyExc_RuntimeError, "failed to parse parameters");
-    if (arr_in == NULL) return NULL;
-
-    if (strlen(str01) < 2)
-        return failure(PyExc_RuntimeError, "need at least 2 characters");
-
-    int n_dim = PyArray_NDIM(arr_in);
-    if (n_dim < 1)
-        return failure(PyExc_RuntimeError, "input need at least 1 dimension");
-    npy_intp n_bit_raw = PyArray_DIM(arr_in, n_dim-1);
-    npy_intp n_mat = 1;
-    for (uint8_t i_dim = 0; i_dim < n_dim-1; i_dim++)
-        n_mat *= PyArray_DIM(arr_in, i_dim);
-
-    if ((n_bit < 1) || (n_bit_raw < n_bit))
-        return failure(
-            PyExc_RuntimeError,
-            "n_bit shall be inferior to the last dimension");
-
-    // ensure the input array is contiguous.
-    // PyArray_GETCONTIGUOUS will increase the reference count.
-    arr_in = PyArray_GETCONTIGUOUS(arr_in);
-
-    npy_intp size_type = PyArray_ITEMSIZE(arr_in);
-    if (n_bit_raw != 8*size_type)
-        return failure(
-            PyExc_RuntimeError,
-            "last dimension shall be equal to the number of bits of the type");
-
-    int py_type = PyArray_TYPE(arr_in);
-    if (py_type == NPY_UINT8)
-    {
-        uint8_t *mat_list = (uint8_t *)PyArray_DATA(arr_in);
-        tbm_print8(mat_list, n_mat, n_bit, str01);
-    }
-    else if (py_type == NPY_UINT16)
-    {
-        uint16_t *mat_list = (uint16_t *)PyArray_DATA(arr_in);
-        tbm_print16(mat_list, n_mat, n_bit, str01);
-    }
-
-    // decrease the reference count
-    Py_DECREF(arr_in);
-    Py_RETURN_NONE;
-}
-
 static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
 {
     PyArrayObject *arr_in;
@@ -631,7 +576,6 @@ static PyMethodDef method_def[] = {
         "mult_t", (PyCFunction)tbm_mult_t, METH_VARARGS | METH_KEYWORDS,
         "multiply a tinybinmat by another transposed tinybinmat"
     },
-    {"print", tbm_print, METH_VARARGS, "print tinybinmat"},
     {
         "sprint", (PyCFunction)tbm_sprint, METH_VARARGS | METH_KEYWORDS, 
         "convert to uint8 array"

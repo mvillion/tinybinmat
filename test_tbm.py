@@ -177,7 +177,6 @@ if __name__ == "__main__":
 
     n_print = 2
     mat_print = mat[:n_print, :]
-    tbm.print(mat_print, n_bit, " x")
 
     mats = tbm.sprint(mat_print, n_bit, n_bit, np.frombuffer(b" x", np.uint8))
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
