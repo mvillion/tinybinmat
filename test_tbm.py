@@ -33,9 +33,9 @@ def test_ok(ok_list, test_str):
     print_list = ["%20s" % test_str]
     for tup in ok_list:
         ok, speed = tup
-        print_list.append(ok_code if ok else ko_code)
         if speed is not None:
             print_list.append("%5.1f" % speed)
+        print_list.append(ok_code if ok else ko_code)
 
     print(" ".join(print_list))
     # if not all(ok):

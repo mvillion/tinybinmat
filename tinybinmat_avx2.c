@@ -150,23 +150,6 @@ void tbm_transpose_avx2(
 }
 
 //______________________________________________________________________________
-// multiply two 8x8 bit matrices
-uint64_t inline tbm_mult8x8_avx2(uint64_t a, uint64_t b)
-{
-    uint64_t out = 0;
-    uint8_t *b8 = (uint8_t *)&b;
-    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
-    {
-        // create bit mask from the least significant bits in a
-        uint64_t bit_a = a & 0x0101010101010101;
-        bit_a *= 0xff;
-        a >>= 1;
-        uint64_t prod = bit_a & (0x0101010101010101*b8[7-i_bit]);
-        out ^= prod;
-    }
-    return out;
-}
-
 __m256i inline tbm_mult8x8_m256i_avx2(__m256i a, uint8_t *b8)
 {
     __m128i repeat8x2 = _mm_set_epi8(
@@ -202,6 +185,28 @@ void inline tbm_mult8x8_x4_avx2(uint64_t a[4], uint64_t b[4], uint64_t out[4])
     __m256i _a = _mm256_loadu_si256((__m256i *)a);
     uint8_t *_b = (uint8_t *)b;
     _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i_avx2(_a, _b)); 
+}
+
+__m256i inline tbm_mult16x16_m256i_avx2(__m256i a3210, __m256i b3210)
+{
+    // a is:    b is:
+    // [0, 1]   [0, 1]   [0, 0]   [0, 1]   [1, 1]   [2, 3]
+    // [2, 3] @ [2, 3] = [2, 2] * [0, 1] + [3, 3] * [2, 3]
+    __m256i a3311 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 1, 1));
+    __m256i a2200 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 0, 0));
+    __m256i b3232 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(3, 2, 3, 2));
+    __m256i b1010 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(1, 0, 1, 0));
+    uint8_t b1010_8[32+7]; // 7 octets for loadu access
+    _mm256_storeu_si256((__m256i *)b1010_8, b1010);
+    uint8_t b3232_8[32+7];
+    _mm256_storeu_si256((__m256i *)b3232_8, b3232);
+
+
+    __m256i out = _mm256_xor_si256(
+        tbm_mult8x8_m256i_avx2(a3311, b3232_8),
+        tbm_mult8x8_m256i_avx2(a2200, b1010_8));
+
+    return out;
 }
 
 void tbm_mult_avx2_256(
@@ -241,14 +246,10 @@ static void __attribute__ ((noinline)) tbm_mult_avx2_ncol8_2(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-        out[0] = tbm_mult8x8_avx2(in[0], in2[0]);
-        out[0] ^= tbm_mult8x8_avx2(in[1], in2[2]);
-        out[1] = tbm_mult8x8_avx2(in[0], in2[1]);
-        out[1] ^= tbm_mult8x8_avx2(in[1], in2[3]);
-        out[2] = tbm_mult8x8_avx2(in[2], in2[0]);
-        out[2] ^= tbm_mult8x8_avx2(in[3], in2[2]);
-        out[3] = tbm_mult8x8_avx2(in[2], in2[1]);
-        out[3] ^= tbm_mult8x8_avx2(in[3], in2[3]);
+        __m256i in16X16 = _mm256_loadu_si256((__m256i *)in);
+        __m256i in2_16X16 = _mm256_loadu_si256((__m256i *)in2);
+        _mm256_storeu_si256(
+            (__m256i *)out, tbm_mult16x16_m256i_avx2(in16X16, in2_16X16));
         in += 4;
         in2 += 4;
         out += 4;
