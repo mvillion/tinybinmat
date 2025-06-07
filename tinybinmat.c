@@ -185,7 +185,7 @@ uint64_t inline tbm_mult8x8_u64(uint64_t a, uint64_t b)
         uint64_t bit_a = a & 0x0101010101010101;
         bit_a *= 0xff;
         a >>= 1;
-        uint64_t prod = bit_a & (0x0101010101010101*b8[i_bit]);
+        uint64_t prod = bit_a & (0x0101010101010101*b8[7-i_bit]);
         out ^= prod;
     }
     return out;
@@ -239,7 +239,7 @@ uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
     uint8_t *tb = (uint8_t *)&tb8x8;
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
     {
-        uint64_t repeat = 0x0101010101010101*tb[i_bit];
+        uint64_t repeat = 0x0101010101010101*tb[7-i_bit];
         uint64_t prod = a8x8 & repeat;
         prod ^= prod << 4;
         prod ^= prod << 2;
