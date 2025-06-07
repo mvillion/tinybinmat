@@ -99,31 +99,31 @@ void tbm_sprint8_gfnio(
 //______________________________________________________________________________
 uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
 {
-    // input is 8x8 bit matrix with 8 rows: 0x0706050403020100
+    // input is 8x8 bit matrix with 8 rows: 0x0001020304050607
     // 1st bit in rows is LSB, thus reversed compared to matrix notation
-    uint64_t ur_mask4x4 = 0x00000000f0f0f0f0; // up right 4x4 bits
+    uint64_t ur_mask4x4 = 0xf0f0f0f000000000; // up right 4x4 bits
     // uint64_t = dl_mask4x4 = 0x0f0f0f0f00000000; // down left 4x4 bits
     // dl_mask4x4 == ur_mask4x4 << (4*8-4)
-    uint64_t xor = in8x8 ^ (in8x8 >> 28);
+    uint64_t xor = in8x8 ^ (in8x8 << 36);
     xor &= ur_mask4x4;
     in8x8 ^= xor;
-    xor <<= 28;
+    xor >>= 36;
     in8x8 ^= xor;
-    uint64_t ur_mask2x2 = 0x0000cccc0000cccc; // 4 up right 2x2 bits
+    uint64_t ur_mask2x2 = 0xcccc0000cccc0000; // 4 up right 2x2 bits
     // uint64_t = dl_mask2x2 = 0x3333000033330000; // 4 down left 2x2 bits
     // dl_mask2x2 == ur_mask2x2 << (2*8-2)
-    xor = in8x8 ^ (in8x8 >> 14);
+    xor = in8x8 ^ (in8x8 << 18);
     xor &= ur_mask2x2;
     in8x8 ^= xor;
-    xor <<= 14;
+    xor >>= 18;
     in8x8 ^= xor;
-    uint64_t ur_mask1x1 = 0x00aa00aa00aa00aa; // 16 up right 1x1 bits
+    uint64_t ur_mask1x1 = 0xaa00aa00aa00aa00; // 16 up right 1x1 bits
     // uint64_t = dl_mask1x1 = 0x5500550055005500; // 16 down left 1x1 bits
     // dl_mask1x1 == ur_mask1x1 << (8-1)
-    xor = in8x8 ^ (in8x8 >> 7);
+    xor = in8x8 ^ (in8x8 << 9);
     xor &= ur_mask1x1;
     in8x8 ^= xor;
-    xor <<= 7;
+    xor >>= 9;
     in8x8 ^= xor;
     return in8x8;
 }
@@ -134,7 +134,8 @@ void inline tbm_transpose8x8_x4_u64(uint64_t in[4])
         in[i_prod] = tbm_transpose8x8_u64(in[i_prod]);
 }
 
-void tbm_transpose_u64_1d(uint64_t *in, uint64_t n_mat, uint64_t *out)
+void __attribute__ ((noinline)) tbm_transpose_u64_1d(
+    uint64_t *in, uint64_t n_mat, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
         out[i_mat] = tbm_transpose8x8_u64(in[i_mat]);
