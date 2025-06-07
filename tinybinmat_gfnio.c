@@ -239,6 +239,7 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_2(
 #endif
 }
 
+#if 1 // this code is faster than the one below
 static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
@@ -263,6 +264,19 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
     }
 #endif
 }
+#else
+static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        tbm_mult32x32_template(in, in2, out, tbm_mult8x8_1x4_gfnio);
+        in += 16;
+        in2 += 16;
+        out += 16;
+    }
+}
+#endif
 
 #pragma GCC pop_options //------------------------------------------------------
 

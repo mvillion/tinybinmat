@@ -211,11 +211,42 @@ void tbm_mult_u64_256(
         in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_mult8x8_1x4_u64);
 }
 
-static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_1(
+static void __attribute__ ((noinline)) tbm_mult_u64_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
         out[i_mat] = tbm_mult8x8_u64(in[i_mat], in2[i_mat]);
+}
+
+static void __attribute__ ((noinline)) tbm_mult_u64_ncol8_2(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        out[0] = tbm_mult8x8_u64(in[0], in2[0]);
+        out[0] ^= tbm_mult8x8_u64(in[1], in2[2]);
+        out[1] = tbm_mult8x8_u64(in[0], in2[1]);
+        out[1] ^= tbm_mult8x8_u64(in[1], in2[3]);
+        out[2] = tbm_mult8x8_u64(in[2], in2[0]);
+        out[2] ^= tbm_mult8x8_u64(in[3], in2[2]);
+        out[3] = tbm_mult8x8_u64(in[2], in2[1]);
+        out[3] ^= tbm_mult8x8_u64(in[3], in2[3]);
+        in += 4;
+        in2 += 4;
+        out += 4;
+    }
+}
+
+static void __attribute__ ((noinline)) tbm_mult_u64_ncol8_4(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        tbm_mult32x32_template(in, in2, out, tbm_mult8x8_1x4_u64);
+        in += 16;
+        in2 += 16;
+        out += 16;
+    }
 }
 
 void tbm_mult_u64(
@@ -223,11 +254,11 @@ void tbm_mult_u64(
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_col8_2 == 1))
-        return tbm_mult_gfnio_ncol8_1(in, n_mat, in2, out);
-    // if ((n_col8 == 2) && (n_row8 == 2) && (n_col8_2 == 2))
-    //     return tbm_mult_gfnio_ncol8_2(in, n_mat, in2, out);
-    // if ((n_col8 == 4) && (n_row8 == 4) && (n_col8_2 == 4))
-    //     return tbm_mult_gfnio_ncol8_4(in, n_mat, in2, out);
+        return tbm_mult_u64_ncol8_1(in, n_mat, in2, out);
+    if ((n_col8 == 2) && (n_row8 == 2) && (n_col8_2 == 2))
+        return tbm_mult_u64_ncol8_2(in, n_mat, in2, out);
+    if ((n_col8 == 4) && (n_row8 == 4) && (n_col8_2 == 4))
+        return tbm_mult_u64_ncol8_4(in, n_mat, in2, out);
     
     tbm_mult_u64_256(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
 }
