@@ -19,6 +19,9 @@ import sys
 from time import time
 from termcolor import colored
 
+method_list = ["default", "avx2", "gfni"]
+# method_list = ["avx2", "gfni"]
+
 
 def test_ok(ok_list, test_str):
     if type(ok_list) is not list:
@@ -60,7 +63,7 @@ def test_mult(mat8, matb8, n_bit):
     ref_duration = time()-t0
 
     ok_list = []
-    for method in ["default", "avx2", "gfni"]:
+    for method in method_list:
         t0 = time()
         prod = tbm.mult(encode, encodeb, method=method)
         duration = time()-t0
@@ -83,7 +86,7 @@ def test_mult_t(mat8, matb8, n_bit):
     ref_duration = time()-t0
 
     ok_list = []
-    for method in ["default", "avx2", "gfni"]:
+    for method in method_list:
         t0 = time()
         prod = tbm.mult_t(encode, encodeb, method=method)
         duration = time()-t0
@@ -103,7 +106,7 @@ def test_transpose(mat8, n_bit):
     ref_duration = time()-t0
 
     ok_list = []
-    for method in ["default", "avx2", "gfni"]:
+    for method in method_list:
         t0 = time()
         mat8t = tbm.transpose(encode, method=method)
         duration = time()-t0

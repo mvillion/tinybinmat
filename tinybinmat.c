@@ -1,27 +1,6 @@
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
-void print_avx2_uint64(__m256i reg)
-{
-    uint64_t *ptr = (uint64_t *)&reg;
-    for (uint8_t k = 3; k != 0; k--)
-        printf("%016lx ", ptr[k]);
-    printf("%016lx\n", ptr[0]);
-}
-
-__m256i _mm256_movm_epi8_avx2(const uint32_t mask) 
-{
-    __m256i vmask = _mm256_set1_epi32(mask);
-    const __m256i shuffle = _mm256_set_epi64x(
-        0x0303030303030303, 0x0202020202020202,
-        0x0101010101010101, 0x0000000000000000);
-    vmask = _mm256_shuffle_epi8(vmask, shuffle);
-    // "%016x" % (0x7fbfdfeff7fbfdfe ^ ((2 << 64)-1)) -> '18040201008040201'
-    const __m256i bit_mask = _mm256_set1_epi64x(0x7fbfdfeff7fbfdfe);
-    vmask = _mm256_or_si256(vmask, bit_mask);
-    return _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
-}
-
 void tbm_encode_gfnio(
     uint8_t *in, uint64_t n_mat, uint32_t n_row, uint32_t n_col, uint64_t *out)
 {

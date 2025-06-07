@@ -1,6 +1,5 @@
 #include "tinybinmat.h"
-// #include "tinybinmat_avx2.h"
-// #include "tinybinmat_gfni.h"
+#include "tinybinmat_avx2.h"
 #include "tinybinmat_gfnio.h"
 #include "tinybinmat_utils.h"
 
@@ -166,8 +165,8 @@ static PyObject* tbm_mult_template(
         uint64_t *in2 = (uint64_t *)PyArray_DATA(arr_in2);
         uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
         tbm_mult_fun_t *fun[6] = {
-            tbm_mult_u64, tbm_mult_u64, tbm_mult_gfnio, 
-            tbm_mult_t_u64, tbm_mult_t_u64, tbm_mult_t_gfnio};
+            tbm_mult_u64, tbm_mult_avx2, tbm_mult_gfnio, 
+            tbm_mult_t_u64, tbm_mult_t_avx2, tbm_mult_t_gfnio};
         if (is_transposed)
             fun[i_fun](in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
         else
@@ -323,7 +322,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
         uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
         uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
         tbm_transpose_fun_t *fun[3] = {
-            tbm_transpose_u64, tbm_transpose_u64, tbm_transpose_gfnio};
+            tbm_transpose_u64, tbm_transpose_avx2, tbm_transpose_gfnio};
         fun[i_fun](in, n_mat, n_row8, n_col8, out);
     }
     else
