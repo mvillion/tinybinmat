@@ -23,9 +23,8 @@ __m256i _mm256_movm_epi8_avx2(const uint32_t mask)
 }
 
 //______________________________________________________________________________
-void inline inline tbm_transpose8x8_x4_avx2(uint64_t in[4])
+__m256i inline inline tbm_transpose8x8_m256i_avx2(__m256i in8x8_4)
 {
-    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
     __m256i ur_mask4x4 = _mm256_set1_epi64x(0xf0f0f0f000000000);
     __m256i xor = _mm256_xor_si256(in8x8_4, _mm256_slli_epi64(in8x8_4, 36));
     xor = _mm256_and_si256(xor, ur_mask4x4);
@@ -44,7 +43,13 @@ void inline inline tbm_transpose8x8_x4_avx2(uint64_t in[4])
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
     xor = _mm256_srli_epi64(xor, 9);
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
-    _mm256_storeu_si256((__m256i *)in, in8x8_4);
+    return in8x8_4;
+}
+
+void inline inline tbm_transpose8x8_x4_avx2(uint64_t in[4])
+{
+    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
+    _mm256_storeu_si256((__m256i *)in, tbm_transpose8x8_m256i_avx2(in8x8_4));
 }
 
 void __attribute__ ((noinline)) tbm_transpose_avx2_1d(
@@ -67,6 +72,50 @@ void __attribute__ ((noinline)) tbm_transpose_avx2_1d(
         out[i_mat+i_4] = tmp[i_4];
 }
 
+static __attribute__ ((noinline)) void tbm_transpose_avx2_2x2(
+    __m256i *in, uint64_t n_mat, __m256i *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        // load 4x8x8 blocks
+        __m256i in8x8_4 = _mm256_loadu_si256(in+i_mat);
+        // transpose 4x8x8 blocks
+        __m256i a3210r = tbm_transpose8x8_m256i_avx2(in8x8_4);
+        __m256i a3120r = _mm256_permute4x64_epi64(
+            a3210r, _MM_SHUFFLE(3, 1, 2, 0));
+    
+        // store transposed 4x8x8 blocks
+        _mm256_storeu_si256(out+i_mat, a3120r);
+    }
+}
+
+static __attribute__ ((noinline)) void tbm_transpose_avx2_4x4(
+    __m256i *in, uint64_t n_mat, __m256i *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        __m256i in3210 = _mm256_loadu_si256(in+i_mat*4+0);
+        __m256i in7654 = _mm256_loadu_si256(in+i_mat*4+1);
+        __m256i inba98 = _mm256_loadu_si256(in+i_mat*4+2);
+        __m256i infedc = _mm256_loadu_si256(in+i_mat*4+3);
+    
+        __m256i in9810 = _mm256_permute2x128_si256(in3210, inba98, 0x20);
+        __m256i indc54 = _mm256_permute2x128_si256(in7654, infedc, 0x20);
+        __m256i inba32 = _mm256_permute2x128_si256(in3210, inba98, 0x31);
+        __m256i infe76 = _mm256_permute2x128_si256(in7654, infedc, 0x31);
+    
+        __m256i inc840 = _mm256_unpacklo_epi64(in9810, indc54);
+        __m256i ind951 = _mm256_unpackhi_epi64(in9810, indc54);
+        __m256i inea62 = _mm256_unpacklo_epi64(inba32, infe76);
+        __m256i infb73 = _mm256_unpackhi_epi64(inba32, infe76);
+
+        _mm256_storeu_si256(out+i_mat*4+0, tbm_transpose8x8_m256i_avx2(inc840));
+        _mm256_storeu_si256(out+i_mat*4+1, tbm_transpose8x8_m256i_avx2(ind951));
+        _mm256_storeu_si256(out+i_mat*4+2, tbm_transpose8x8_m256i_avx2(inea62));
+        _mm256_storeu_si256(out+i_mat*4+3, tbm_transpose8x8_m256i_avx2(infb73));
+    }
+}
+
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void tbm_transpose_avx2_256(
@@ -76,6 +125,8 @@ void tbm_transpose_avx2_256(
     tbm_transpose_256_template(
         in, n_mat, n_row8, n_col8, out, tbm_transpose8x8_x4_avx2);
 }
+
+#pragma GCC pop_options //-----------------------------------------------------
 
 void tbm_transpose_avx2(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
@@ -87,17 +138,16 @@ void tbm_transpose_avx2(
         uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
         return tbm_transpose_avx2_1d(in, n8x8, out);
     }
-    // else if (n_row8 == 2 && n_col8 == 2)
-    // {
-    //     return tbm_transpose_avx2_2x2((__m256i *)in, n_mat, (__m256i *)out);
-    // }
-    // else if (n_row8 == 4 && n_col8 == 4)
-    // {
-    //     return tbm_transpose_avx2_4x4((__m256i *)in, n_mat, (__m256i *)out);
-    // }
+    else if (n_row8 == 2 && n_col8 == 2)
+    {
+        return tbm_transpose_avx2_2x2((__m256i *)in, n_mat, (__m256i *)out);
+    }
+    else if (n_row8 == 4 && n_col8 == 4)
+    {
+        return tbm_transpose_avx2_4x4((__m256i *)in, n_mat, (__m256i *)out);
+    }
     tbm_transpose_avx2_256(in, n_mat, n_row8, n_col8, out);
 }
-#pragma GCC pop_options //-----------------------------------------------------
 
 //______________________________________________________________________________
 // multiply two 8x8 bit matrices

@@ -15,11 +15,11 @@ void inline tbm_transpose8x8_x4_gfni(uint64_t in8x8[4])
 {
     // _mm256_gf2p8affine_epi64_epi8(I, A, 0) is (A*I.T).T = A.T
     __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in8x8);
-    __m256i out8x8_4 = tbm_transpose8x8_m256i_gfni(in8x8_4);
-    _mm256_storeu_si256((__m256i *)in8x8, out8x8_4);
+    _mm256_storeu_si256((__m256i *)in8x8, tbm_transpose8x8_m256i_gfni(in8x8_4));
 }
 
-static void tbm_transpose_gfnio_1d(uint64_t *in, uint64_t n8x8, uint64_t *out)
+static __attribute__ ((noinline)) void tbm_transpose_gfnio_1d(
+    uint64_t *in, uint64_t n8x8, uint64_t *out)
 {
     uint64_t i8x8; //!< index for 4 8x8 blocks
     for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
@@ -40,7 +40,8 @@ static void tbm_transpose_gfnio_1d(uint64_t *in, uint64_t n8x8, uint64_t *out)
     _mm256_maskstore_epi64((long long int *)(out+i8x8), mask, out8x8_4);
 }
 
-static void tbm_transpose_gfnio_2x2(__m256i *in, uint64_t n_mat, __m256i *out)
+static __attribute__ ((noinline)) void tbm_transpose_gfnio_2x2(
+    __m256i *in, uint64_t n_mat, __m256i *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
@@ -56,7 +57,8 @@ static void tbm_transpose_gfnio_2x2(__m256i *in, uint64_t n_mat, __m256i *out)
     }
 }
 
-static void tbm_transpose_gfnio_4x4(__m256i *in, uint64_t n_mat, __m256i *out)
+static __attribute__ ((noinline)) void tbm_transpose_gfnio_4x4(
+    __m256i *in, uint64_t n_mat, __m256i *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
