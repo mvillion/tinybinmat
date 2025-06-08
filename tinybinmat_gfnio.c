@@ -1,7 +1,7 @@
 #include "tinybinmat.h"
-#include "tinybinmat_gfnio.h"
-
 #include "tinybinmat_template.c"
+
+#define __SUFFIX(fun) fun##_gfni
 
 //______________________________________________________________________________
 static __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
@@ -96,7 +96,7 @@ static void __attribute__ ((noinline)) tbm_transpose_256(
 
 #pragma GCC pop_options //-----------------------------------------------------
 
-void tbm_transpose_gfnio(
+void __SUFFIX(tbm_transpose) (
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
     uint64_t *out)
 {
@@ -249,7 +249,7 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_4(
     }
 }
 #else
-static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
+static void __attribute__ ((noinline)) tbm_mult_ncol8_4(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -264,7 +264,7 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
 
 #pragma GCC pop_options //------------------------------------------------------
 
-void tbm_mult_gfnio(
+void __SUFFIX(tbm_mult) (
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
@@ -466,7 +466,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_ncol8_4(
 
 #pragma GCC pop_options //------------------------------------------------------
 
-void tbm_mult_t_gfnio(
+void __SUFFIX(tbm_mult_t) (
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
 {
