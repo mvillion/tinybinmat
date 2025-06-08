@@ -347,8 +347,8 @@ __m256i inline tbm_mult_t16x16_m256i_gfnio(__m256i a3210, __m256i b3210)
     __m256i b2020 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(2, 0, 2, 0));
 
     __m256i out = _mm256_xor_si256(
-        _mm256_gf2p8affine_epi64_epi8(a3311, b3131, 0),
-        _mm256_gf2p8affine_epi64_epi8(a2200, b2020, 0));
+        tbm_mult_t8x8_m256i_gfnio(a3311, b3131),
+        tbm_mult_t8x8_m256i_gfnio(a2200, b2020));
 
     return out;
 }
