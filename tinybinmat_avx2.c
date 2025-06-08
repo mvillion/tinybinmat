@@ -339,6 +339,73 @@ uint64_t inline tbm_dot_t_avx2(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
     return out;
 }
 
+__m256i inline tbm_mult_t16x16_m256i_avx2(__m256i a3210, __m256i b3210)
+{
+    // a is:    b.T is:
+    // [0, 1]   [0, 2]   [0, 0]   [0, 2]   [1, 1]   [1, 3]
+    // [2, 3] @ [1, 3] = [2, 2] * [0, 2] + [3, 3] * [1, 3]
+    __m256i a3311 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 1, 1));
+    __m256i a2200 = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 0, 0));
+    __m256i b3131 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(3, 1, 3, 1));
+    __m256i b2020 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(2, 0, 2, 0));
+
+    __m256i out = _mm256_xor_si256(
+        tbm_mult_t8x8_m256i_avx2(a3311, b3131),
+        tbm_mult_t8x8_m256i_avx2(a2200, b2020));
+
+    return out;
+}
+
+void inline tbm_mult_t32x32_m256i_avx2(__m256i a[4], __m256i b[4])
+{
+    __m256i b_3210 = b[0];
+    __m256i b_7654 = b[1];
+    __m256i b_ba98 = b[2];
+    __m256i b_fedc = b[3];
+
+    __m256i b_9810 = _mm256_permute2x128_si256(b_3210, b_ba98, 0x20);
+    __m256i b_dc54 = _mm256_permute2x128_si256(b_7654, b_fedc, 0x20);
+    __m256i b_ba32 = _mm256_permute2x128_si256(b_3210, b_ba98, 0x31);
+    __m256i b_fe76 = _mm256_permute2x128_si256(b_7654, b_fedc, 0x31);
+
+    __m256i b_c840 = _mm256_unpacklo_epi64(b_9810, b_dc54);
+    __m256i b_d951 = _mm256_unpackhi_epi64(b_9810, b_dc54);
+    __m256i b_ea62 = _mm256_unpacklo_epi64(b_ba32, b_fe76);
+    __m256i b_fb73 = _mm256_unpackhi_epi64(b_ba32, b_fe76);
+
+    uint64_t *a64 = (uint64_t *)a;
+    for (uint8_t i_row = 0; i_row < 4; i_row++)
+    {
+        // __m256i a3210 = a[i_row];
+
+        __m256i repeat; //<! current product of a cell 4 times  
+        __m256i prod; //<! current product of a cell and b row
+        __m256i out; //<! accumulated sum of the products
+        out = _mm256_setzero_si256();
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(0, 0, 0, 0));
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_c840);
+        out = _mm256_xor_si256(out, prod);
+
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(1, 1, 1, 1));
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_d951);
+        out = _mm256_xor_si256(out, prod);
+
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 2, 2));
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_ea62);
+        out = _mm256_xor_si256(out, prod);
+
+        // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 3, 3));
+        repeat = _mm256_set1_epi64x(*a64++);
+        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_fb73);
+        out = _mm256_xor_si256(out, prod);
+
+        a[i_row] = out;
+    }
+}
+
 #pragma GCC push_options //-----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 void __attribute__ ((noinline)) tbm_mult_t_dot_avx2(
@@ -373,6 +440,50 @@ void __attribute__ ((noinline)) tbm_mult_t_avx2_ncol8_1(
         tbm_mult_t8x8_m256i_avx2(in8x8_4, in2_8x8_4));
 }
 
+static void __attribute__ ((noinline)) tbm_mult_t_avx2_ncol8_2(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+#if defined(USE_DOT)
+    tbm_mult_t_dot_avx2(in, n_mat, 2, 2, in2, 2, out);
+#else
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        __m256i in16X16 = _mm256_loadu_si256((__m256i *)in);
+        __m256i in2_16X16 = _mm256_loadu_si256((__m256i *)in2);
+        _mm256_storeu_si256(
+            (__m256i *)out, tbm_mult_t16x16_m256i_avx2(in16X16, in2_16X16));
+        in += 4;
+        in2 += 4;
+        out += 4;
+    }
+#endif
+}
+
+static void __attribute__ ((noinline)) tbm_mult_t_avx2_ncol8_4(
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
+{
+#if defined(USE_DOT)
+    tbm_mult_t_dot_avx2(in, n_mat, 4, 4, in2, 4, out);
+#else
+    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
+    {
+        __m256i in8x32[4];
+        __m256i in2_8x32[4];
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+        {
+            in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
+            in2_8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in2)+i_8row);
+        }
+        tbm_mult_t32x32_m256i_avx2(in8x32, in2_8x32);
+        for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
+            _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
+        in += 16;
+        in2 += 16;
+        out += 16;
+    }
+#endif
+}
+
 #pragma GCC pop_options //------------------------------------------------------
 
 void tbm_mult_t_avx2(
@@ -381,10 +492,10 @@ void tbm_mult_t_avx2(
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_row8_2 == 1))
         return tbm_mult_t_avx2_ncol8_1(in, n_mat, in2, out);
-    // if ((n_col8 == 2) && (n_row8 == 2) && (n_row8_2 == 2))
-    //     return tbm_mult_t_avx2_ncol8_2(in, n_mat, in2, out);
-    // if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
-    //     return tbm_mult_t_avx2_ncol8_4(in, n_mat, in2, out);
+    if ((n_col8 == 2) && (n_row8 == 2) && (n_row8_2 == 2))
+        return tbm_mult_t_avx2_ncol8_2(in, n_mat, in2, out);
+    if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
+        return tbm_mult_t_avx2_ncol8_4(in, n_mat, in2, out);
     
     tbm_mult_t_dot_avx2(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
 }
