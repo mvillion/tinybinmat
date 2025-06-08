@@ -18,7 +18,7 @@ void inline tbm_transpose8x8_x4_gfni(uint64_t in8x8[4])
     _mm256_storeu_si256((__m256i *)in8x8, tbm_transpose8x8_m256i_gfni(in8x8_4));
 }
 
-static __attribute__ ((noinline)) void tbm_transpose_gfnio_1d(
+static __attribute__ ((noinline)) void tbm_transpose_1d(
     uint64_t *in, uint64_t n8x8, uint64_t *out)
 {
     uint64_t i8x8; //!< index for 4 8x8 blocks
@@ -40,7 +40,7 @@ static __attribute__ ((noinline)) void tbm_transpose_gfnio_1d(
     _mm256_maskstore_epi64((long long int *)(out+i8x8), mask, out8x8_4);
 }
 
-static __attribute__ ((noinline)) void tbm_transpose_gfnio_2x2(
+static __attribute__ ((noinline)) void tbm_transpose_2x2(
     __m256i *in, uint64_t n_mat, __m256i *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -57,7 +57,7 @@ static __attribute__ ((noinline)) void tbm_transpose_gfnio_2x2(
     }
 }
 
-static __attribute__ ((noinline)) void tbm_transpose_gfnio_4x4(
+static __attribute__ ((noinline)) void tbm_transpose_4x4(
     __m256i *in, uint64_t n_mat, __m256i *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -86,7 +86,7 @@ static __attribute__ ((noinline)) void tbm_transpose_gfnio_4x4(
 
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
-void __attribute__ ((noinline)) tbm_transpose_gfnio_256(
+static void __attribute__ ((noinline)) tbm_transpose_256(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
     uint64_t *out)
 {
@@ -104,17 +104,17 @@ void tbm_transpose_gfnio(
     {
         // no block transpose needed
         uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
-        return tbm_transpose_gfnio_1d(in, n8x8, out);
+        return tbm_transpose_1d(in, n8x8, out);
     }
     else if (n_row8 == 2 && n_col8 == 2)
     {
-        return tbm_transpose_gfnio_2x2((__m256i *)in, n_mat, (__m256i *)out);
+        return tbm_transpose_2x2((__m256i *)in, n_mat, (__m256i *)out);
     }
     else if (n_row8 == 4 && n_col8 == 4)
     {
-        return tbm_transpose_gfnio_4x4((__m256i *)in, n_mat, (__m256i *)out);
+        return tbm_transpose_4x4((__m256i *)in, n_mat, (__m256i *)out);
     }
-    tbm_transpose_gfnio_256(in, n_mat, n_row8, n_col8, out);
+    tbm_transpose_256(in, n_mat, n_row8, n_col8, out);
 }
 
 //______________________________________________________________________________
@@ -186,7 +186,7 @@ void inline tbm_mult32x32_m256i_gfnio(__m256i a[4], __m256i b[4])
 
 #pragma GCC push_options //-----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
-void __attribute__ ((noinline)) tbm_mult_gfnio_256(
+static void __attribute__ ((noinline)) tbm_mult_256(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
@@ -194,7 +194,7 @@ void __attribute__ ((noinline)) tbm_mult_gfnio_256(
         in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_mult8x8_1x4_gfnio);
 }
 
-static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_1(
+static void __attribute__ ((noinline)) tbm_mult_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     uint64_t i8x8; //!< index for 4 8x8 blocks
@@ -218,7 +218,7 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_1(
         tbm_mult8x8_m256i_gfnio(in8x8_4, in2_8x8_4));
 }
 
-static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_2(
+static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -234,7 +234,7 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_2(
 }
 
 #if 1 // this code is faster than the one below
-static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
+static void __attribute__ ((noinline)) tbm_mult_ncol8_4(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -275,13 +275,13 @@ void tbm_mult_gfnio(
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_col8_2 == 1))
-        return tbm_mult_gfnio_ncol8_1(in, n_mat, in2, out);
+        return tbm_mult_ncol8_1(in, n_mat, in2, out);
     if ((n_col8 == 2) && (n_row8 == 2) && (n_col8_2 == 2))
-        return tbm_mult_gfnio_ncol8_2(in, n_mat, in2, out);
+        return tbm_mult_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_col8_2 == 4))
-        return tbm_mult_gfnio_ncol8_4(in, n_mat, in2, out);
+        return tbm_mult_ncol8_4(in, n_mat, in2, out);
     
-    tbm_mult_gfnio_256(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
+    tbm_mult_256(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
 }
 
 //______________________________________________________________________________
@@ -369,22 +369,22 @@ void inline tbm_mult_t32x32_m256i_gfnio(__m256i a[4], __m256i b[4])
         out = _mm256_setzero_si256();
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(0, 0, 0, 0));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b_c840, 0);
+        prod = tbm_mult_t8x8_m256i_gfnio(repeat, b_c840);
         out = _mm256_xor_si256(out, prod);
 
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(1, 1, 1, 1));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b_d951, 0);
+        prod = tbm_mult_t8x8_m256i_gfnio(repeat, b_d951);
         out = _mm256_xor_si256(out, prod);
 
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 2, 2));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b_ea62, 0);
+        prod = tbm_mult_t8x8_m256i_gfnio(repeat, b_ea62);
         out = _mm256_xor_si256(out, prod);
 
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 3, 3));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = _mm256_gf2p8affine_epi64_epi8(repeat, b_fb73, 0);
+        prod = tbm_mult_t8x8_m256i_gfnio(repeat, b_fb73);
         out = _mm256_xor_si256(out, prod);
 
         a[i_row] = out;
@@ -393,7 +393,7 @@ void inline tbm_mult_t32x32_m256i_gfnio(__m256i a[4], __m256i b[4])
 
 #pragma GCC push_options //-----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
-void __attribute__ ((noinline)) tbm_mult_t_dot_gfnio(
+static void __attribute__ ((noinline)) tbm_mult_t_dot(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
@@ -401,7 +401,7 @@ void __attribute__ ((noinline)) tbm_mult_t_dot_gfnio(
         in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_dot_t_gfnio);
 }
 
-static void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_1(
+static void __attribute__ ((noinline)) tbm_mult_t_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
 #if defined(USE_DOT)
@@ -429,7 +429,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_1(
 #endif
 }
 
-static void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_2(
+static void __attribute__ ((noinline)) tbm_mult_t_ncol8_2(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
 #if defined(USE_DOT)
@@ -448,7 +448,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_2(
 #endif
 }
 
-static void __attribute__ ((noinline)) tbm_mult_t_gfnio_ncol8_4(
+static void __attribute__ ((noinline)) tbm_mult_t_ncol8_4(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
 #if defined(USE_DOT)
@@ -480,11 +480,11 @@ void tbm_mult_t_gfnio(
     uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_row8_2 == 1))
-        return tbm_mult_t_gfnio_ncol8_1(in, n_mat, in2, out);
+        return tbm_mult_t_ncol8_1(in, n_mat, in2, out);
     if ((n_col8 == 2) && (n_row8 == 2) && (n_row8_2 == 2))
-        return tbm_mult_t_gfnio_ncol8_2(in, n_mat, in2, out);
+        return tbm_mult_t_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
-        return tbm_mult_t_gfnio_ncol8_4(in, n_mat, in2, out);
+        return tbm_mult_t_ncol8_4(in, n_mat, in2, out);
     
-    tbm_mult_t_dot_gfnio(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
+    tbm_mult_t_dot(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
 }
