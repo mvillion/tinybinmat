@@ -1,21 +1,50 @@
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
+#define USE_GFNI
+#if defined(USE_GFNI)
 #define __SUFFIX(fun) fun##_gfni
+#else
+#define __SUFFIX(fun) fun##_avx2
+#endif
 
 //______________________________________________________________________________
+#if defined(USE_GFNI)
 static __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 {
     // _mm256_gf2p8affine_epi64_epi8(I, A, 0) is (A*I.T).T = A.T
     __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
     return _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, in8x8_4, 0);
 }
-
-static void inline tbm_transpose8x8_x4(uint64_t in8x8[4])
+#else
+static __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 {
-    // _mm256_gf2p8affine_epi64_epi8(I, A, 0) is (A*I.T).T = A.T
-    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in8x8);
-    _mm256_storeu_si256((__m256i *)in8x8, tbm_transpose8x8_m256i(in8x8_4));
+    __m256i ur_mask4x4 = _mm256_set1_epi64x(0xf0f0f0f000000000);
+    __m256i xor = _mm256_xor_si256(in8x8_4, _mm256_slli_epi64(in8x8_4, 36));
+    xor = _mm256_and_si256(xor, ur_mask4x4);
+    in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
+    xor = _mm256_srli_epi64(xor, 36);
+    in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
+    __m256i ur_mask2x2 = _mm256_set1_epi64x(0xcccc0000cccc0000);
+    xor = _mm256_xor_si256(in8x8_4, _mm256_slli_epi64(in8x8_4, 18));
+    xor = _mm256_and_si256(xor, ur_mask2x2);
+    in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
+    xor = _mm256_srli_epi64(xor, 18);
+    in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
+    __m256i ur_mask1x1 = _mm256_set1_epi64x(0xaa00aa00aa00aa00);
+    xor = _mm256_xor_si256(in8x8_4, _mm256_slli_epi64(in8x8_4, 9));
+    xor = _mm256_and_si256(xor, ur_mask1x1);
+    in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
+    xor = _mm256_srli_epi64(xor, 9);
+    in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
+    return in8x8_4;
+}
+#endif
+
+static void inline tbm_transpose8x8_x4(uint64_t in[4])
+{
+    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
+    _mm256_storeu_si256((__m256i *)in, tbm_transpose8x8_m256i(in8x8_4));
 }
 
 static __attribute__ ((noinline)) void tbm_transpose_1d(
@@ -118,13 +147,38 @@ void __SUFFIX(tbm_transpose) (
 }
 
 //______________________________________________________________________________
+#if defined(USE_GFNI)
 static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
 {
     // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
     // _mm256_gf2p8affine_epi64_epi8(A, B.T, 0) is (B.T*A.T).T = A*B
     return _mm256_gf2p8affine_epi64_epi8(a, tbm_transpose8x8_m256i(b), 0);
 }
+#else
+static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
+{
+    __m128i repeat8x2 = _mm_set_epi8(
+        8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
+    __m256i repeat8x4 = _mm256_set_m128i(repeat8x2, repeat8x2);
     
+    __m256i out = _mm256_setzero_si256();
+    __m256i test_bit = _mm256_set1_epi8(128);
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        // create bit mask from the most significant bits in a octets
+        __m256i bit_a = _mm256_and_si256(a, test_bit);
+        bit_a = _mm256_cmpeq_epi8(bit_a, test_bit);
+        a = _mm256_slli_epi64(a, 1);
+        // repeat 8 times leat significant octet of b 8x8 matrices
+        __m256i b_repeat = _mm256_shuffle_epi8(b, repeat8x4);
+        b = _mm256_srli_epi64(b, 8);
+        __m256i prod = _mm256_and_si256(bit_a, b_repeat);
+        out = _mm256_xor_si256(out, prod);
+    }
+    return out;
+}
+#endif
+
 static void inline tbm_mult8x8_1x4(
     uint64_t a, uint64_t b[4], uint64_t out[4])
 {
@@ -279,12 +333,46 @@ void __SUFFIX(tbm_mult) (
 }
 
 //______________________________________________________________________________
+#if defined(USE_GFNI)
 static __m256i inline tbm_mult_t8x8_m256i(__m256i a, __m256i b)
 {
     // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
     // _mm256_gf2p8affine_epi64_epi8(A, B, 0) is (B*A.T).T = A*B.T
     return _mm256_gf2p8affine_epi64_epi8(a, b, 0);
 }
+#else
+// non-functional!
+uint64_t inline tbm_mult_t8x8_dot_avx2(uint64_t a8x8, uint64_t tb8x8)
+{
+    __m256i tb8x8_4 = _mm256_set1_epi64x(tb8x8);
+    __m256i row_a_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, a8x8 >> 32));
+    __m128i repeat8x2 = _mm_set_epi8(
+        8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
+    __m256i repeat8x4 = _mm256_set_m128i(repeat8x2, repeat8x2);
+
+    __m256i repeat_4 = _mm256_shuffle_epi8(row_a_4, repeat8x4);
+    __m256i prod_4 = _mm256_and_si256(tb8x8_4, repeat_4);
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 4));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 2));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 1));
+    uint64_t out = (uint32_t)_mm256_movemask_epi8(prod_4);
+    
+    row_a_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, a8x8));
+    repeat_4 = _mm256_shuffle_epi8(row_a_4, repeat8x4);
+    prod_4 = _mm256_and_si256(tb8x8_4, repeat_4);
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 4));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 2));
+    prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 1));
+    out <<= 32;
+    out |= (uint32_t)_mm256_movemask_epi8(prod_4);
+    return out;
+}
+
+static __m256i inline tbm_mult_t8x8_m256i(__m256i a, __m256i b)
+{
+    return tbm_mult8x8_m256i(a, tbm_transpose8x8_m256i(b));
+}
+#endif
 
 static uint64_t inline tbm_dot_t(uint64_t *in, uint64_t *in2, uint32_t n_dot)
 {

@@ -1,7 +1,12 @@
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
+//#define USE_GFNI
+#if defined(USE_GFNI)
+#define __SUFFIX(fun) fun##_gfni
+#else
 #define __SUFFIX(fun) fun##_avx2
+#endif
 
 void print_avx2_uint64(__m256i reg)
 {
@@ -25,6 +30,14 @@ __m256i _mm256_movm_epi8_avx2(const uint32_t mask)
 }
 
 //______________________________________________________________________________
+#if defined(USE_GFNI)
+static __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
+{
+    // _mm256_gf2p8affine_epi64_epi8(I, A, 0) is (A*I.T).T = A.T
+    __m256i eye_8x8_4 = _mm256_set1_epi64x(0x0102040810204080);
+    return _mm256_gf2p8affine_epi64_epi8(eye_8x8_4, in8x8_4, 0);
+}
+#else
 static __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 {
     __m256i ur_mask4x4 = _mm256_set1_epi64x(0xf0f0f0f000000000);
@@ -47,8 +60,9 @@ static __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
     in8x8_4 = _mm256_xor_si256(in8x8_4, xor);
     return in8x8_4;
 }
+#endif
 
-static void inline inline tbm_transpose8x8_x4(uint64_t in[4])
+static void inline tbm_transpose8x8_x4(uint64_t in[4])
 {
     __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
     _mm256_storeu_si256((__m256i *)in, tbm_transpose8x8_m256i(in8x8_4));
@@ -57,21 +71,23 @@ static void inline inline tbm_transpose8x8_x4(uint64_t in[4])
 static __attribute__ ((noinline)) void tbm_transpose_1d(
     uint64_t *in, uint64_t n8x8, uint64_t *out)
 {
-    uint64_t i8x8;
-    uint64_t tmp[4]; //!< temporary storage for 4 8x8 blocks
+    uint64_t i8x8; //!< index for 4 8x8 blocks
     for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
     {
-        for (uint8_t i_4 = 0; i_4 < 4; i_4++)
-            out[i8x8+i_4] = in[i8x8+i_4];
-        tbm_transpose8x8_x4(out+i8x8);
+        // load 4x8x8 blocks
+        __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+        // transpose 4x8x8 blocks
+        __m256i out8x8_4 = tbm_transpose8x8_m256i(in8x8_4);
+        // store transposed 4x8x8 blocks
+        _mm256_storeu_si256((__m256i *)(out+i8x8), out8x8_4);
     }
     if (i8x8 == n8x8)
         return; // all blocks are processed
-    for (uint8_t i_4 = 0; i_4 < (n8x8 & 3); i_4++)
-        tmp[i_4] = in[i8x8+i_4];
-    tbm_transpose8x8_x4(tmp);
-    for (uint8_t i_4 = 0; i_4 < (n8x8 & 3); i_4++)
-        out[i8x8+i_4] = tmp[i_4];
+    __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
+    __m256i out8x8_4 = tbm_transpose8x8_m256i(in8x8_4);
+    __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
+    mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n8x8-i8x8), mask);
+    _mm256_maskstore_epi64((long long int *)(out+i8x8), mask, out8x8_4);
 }
 
 static __attribute__ ((noinline)) void tbm_transpose_2x2(
@@ -152,6 +168,14 @@ void __SUFFIX(tbm_transpose) (
 }
 
 //______________________________________________________________________________
+#if defined(USE_GFNI)
+static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
+{
+    // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
+    // _mm256_gf2p8affine_epi64_epi8(A, B.T, 0) is (B.T*A.T).T = A*B
+    return _mm256_gf2p8affine_epi64_epi8(a, tbm_transpose8x8_m256i(b), 0);
+}
+#else
 static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
 {
     __m128i repeat8x2 = _mm_set_epi8(
@@ -174,6 +198,7 @@ static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
     }
     return out;
 }
+#endif
 
 static void inline tbm_mult8x8_1x4(
     uint64_t a, uint64_t b[4], uint64_t out[4])
@@ -329,25 +354,14 @@ void __SUFFIX(tbm_mult) (
 }
 
 //______________________________________________________________________________
-// multiply two 8x8 bit matrices with the second matrix transposed
-uint64_t inline tbm_mult_t8x8_avx2(uint64_t a8x8, uint64_t tb8x8)
+#if defined(USE_GFNI)
+static __m256i inline tbm_mult_t8x8_m256i(__m256i a, __m256i b)
 {
-    uint64_t out = 0;
-    uint8_t *tb = (uint8_t *)&tb8x8;
-    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
-    {
-        uint64_t repeat = 0x0101010101010101*tb[7-i_bit];
-        uint64_t prod = a8x8 & repeat;
-        prod ^= prod << 4;
-        prod ^= prod << 2;
-        prod ^= prod << 1;
-        prod &= 0x8080808080808080;
-        out >>= 1;
-        out |= prod;
-    }
-    return out;
+    // _mm256_gf2p8affine_epi64_epi8(B, A, 0) is (A*B.T).T
+    // _mm256_gf2p8affine_epi64_epi8(A, B, 0) is (B*A.T).T = A*B.T
+    return _mm256_gf2p8affine_epi64_epi8(a, b, 0);
 }
-
+#else
 // non-functional!
 uint64_t inline tbm_mult_t8x8_dot_avx2(uint64_t a8x8, uint64_t tb8x8)
 {
@@ -379,6 +393,7 @@ static __m256i inline tbm_mult_t8x8_m256i(__m256i a, __m256i b)
 {
     return tbm_mult8x8_m256i(a, tbm_transpose8x8_m256i(b));
 }
+#endif
 
 static uint64_t inline tbm_dot_t(uint64_t *in, uint64_t *in2, uint32_t n_dot)
 {
