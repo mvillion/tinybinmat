@@ -24,6 +24,7 @@ def src_from_name(name, cflag=None):
         out["cflags"] = cflag
     return out
 
+
 cflag = ["-O3", "-mavx2"]
 lib_list = []
 for lib_name in ["tinybinmat", "tinybinmat_avx2"]:
