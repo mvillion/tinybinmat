@@ -1,6 +1,5 @@
 #include "tinybinmat.h"
 #include "tinybinmat_avx2.h"
-#include "tinybinmat_gfnio.h"
 #include "tinybinmat_utils.h"
 
 

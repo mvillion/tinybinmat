@@ -30,11 +30,11 @@ for lib_name in ["tinybinmat", "tinybinmat_avx2"]:
     lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 
 cflag = ["-O3", "-mavx2", "-mgfni", "-DUSE_GFNI"]
-for lib_name in ["tinybinmat_gfnio"]:
+for lib_name in ["tinybinmat_gfni"]:
     lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 # cflag = ["-O3", "-mavx2", "-mgfni", "-DUSE_GFNI"]
 # lib_list.append(
-#     ("tinybinmat_gfnio", src_from_name("tinybinmat_avx2", cflag=cflag)))
+#     ("tinybinmat_gfni", src_from_name("tinybinmat_avx2", cflag=cflag)))
 
 lib_list += [
     ("tinybinmat_utils", {"sources": ["tinybinmat_utils.c"]} | inc_dir),
