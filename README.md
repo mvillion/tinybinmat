@@ -34,7 +34,8 @@ After initial investigations with 16x16 and 32x32 bit encodings, the dramatic im
 GFNI instructions use little endian order for rows (8 bits in octets) and also for columns.
 The 1st octet of the matrix is its last row.
 Order of bits is thus:
-| row | -: | -: | -: | -: | -: | -: | -: | -: |
+| row\col | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+| -: | -: | -: | -: | -: | -: | -: | -: | -: |
 | 0 | 63 | 62 | 61 | 60 | 59 | 58 | 57 | 56 |
 | 1 | 55 | 54 | 53 | 52 | 51 | 50 | 49 | 48 |
 | 2 | 47 | 46 | 45 | 44 | 43 | 42 | 41 | 40 |
@@ -47,8 +48,13 @@ Order of bits is thus:
 This weird order is likely due to the fact that transposition of the matrix maintains little endian order.
 
 For a matrix of size 10x20, the encoded dimension is 2x3
-| A<sub>00</sub> | A<sub>01</sub> | A<sub>02</sub> |
-| A<sub>10</sub> | A<sub>11</sub> | A<sub>12</sub> |
+
+| row\col | 0 | 1 | 2 | 
+| -: | -: | -: | -: |
+| 0 | A<sub>00</sub> | A<sub>01</sub> | A<sub>02</sub> |
+| 1 | A<sub>10</sub> | A<sub>11</sub> | A<sub>12</sub> |
+
+Each sub-matrix consists of a uint64 for a 8x8-bit matrix.
 
 Matrix A<sub>02</sub> and A<sub>12</sub> have the last 4 columns with 0.
 Matrix A<sub>10</sub> to A<sub>12</sub> have the last 6 rows with 0.
@@ -77,6 +83,8 @@ These instructions enable to perform multiple GF2 multiplications or additions a
 | :------------------------------- | ---: | ---: |
 | _mm256_and_si256 (mult)          |  256 |    0 |
 | _mm256_xor_si256 (acc)           |    0 |  256 |
-| _mm256_gf2p8affineinv_epi64_epi8 | 2048 | 2048 |
+| _mm256_gf2p8affine_epi64_epi8 | 2048 | 2048 |
 | _mm256_popcnt_epi(8,16,32)       |    0 |  256 |
+
+GFNI instruction 
 
