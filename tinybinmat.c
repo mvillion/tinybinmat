@@ -1,6 +1,8 @@
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
+#define __SUFFIX(fun) fun##_u64
+
 void tbm_encode_gfnio(
     uint8_t *in, uint64_t n_mat, uint32_t n_row, uint32_t n_col, uint64_t *out)
 {
@@ -107,30 +109,30 @@ uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
     return in8x8;
 }
 
-void inline tbm_transpose8x8_x4_u64(uint64_t in[4])
+static void inline tbm_transpose8x8_x4(uint64_t in[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         in[i_prod] = tbm_transpose8x8_u64(in[i_prod]);
 }
 
-void __attribute__ ((noinline)) tbm_transpose_u64_1d(
-    uint64_t *in, uint64_t n_mat, uint64_t *out)
+static __attribute__ ((noinline)) void tbm_transpose_1d(
+    uint64_t *in, uint64_t n8x8, uint64_t *out)
 {
-    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
-        out[i_mat] = tbm_transpose8x8_u64(in[i_mat]);
+    for (uint64_t i8x8 = 0; i8x8 < n8x8; i8x8++)
+        out[i8x8] = tbm_transpose8x8_u64(in[i8x8]);
 }
 
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
-void tbm_transpose_u64_256(
+static void __attribute__ ((noinline)) tbm_transpose_256(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
     uint64_t *out)
 {
     tbm_transpose_256_template(
-        in, n_mat, n_row8, n_col8, out, tbm_transpose8x8_x4_u64);
+        in, n_mat, n_row8, n_col8, out, tbm_transpose8x8_x4);
 }
 
-void tbm_transpose_u64(
+void __SUFFIX(tbm_transpose) (
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
     uint64_t *out)
 {
@@ -138,17 +140,17 @@ void tbm_transpose_u64(
     {
         // no block transpose needed
         uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
-        return tbm_transpose_u64_1d(in, n8x8, out);
+        return tbm_transpose_1d(in, n8x8, out);
     }
     // else if (n_row8 == 2 && n_col8 == 2)
     // {
-    //     return tbm_transpose_u64_2x2((__m256i *)in, n_mat, (__m256i *)out);
+    //     return tbm_transpose_2x2((__m256i *)in, n_mat, (__m256i *)out);
     // }
     // else if (n_row8 == 4 && n_col8 == 4)
     // {
-    //     return tbm_transpose_u64_4x4((__m256i *)in, n_mat, (__m256i *)out);
+    //     return tbm_transpose_4x4((__m256i *)in, n_mat, (__m256i *)out);
     // }
-    tbm_transpose_u64_256(in, n_mat, n_row8, n_col8, out);
+    tbm_transpose_256(in, n_mat, n_row8, n_col8, out);
 }
 #pragma GCC pop_options //-----------------------------------------------------
 
@@ -170,34 +172,36 @@ uint64_t inline tbm_mult8x8_u64(uint64_t a, uint64_t b)
     return out;
 }
 
-void inline tbm_mult8x8_1x4_u64(uint64_t a, uint64_t b[4], uint64_t out[4])
+static void inline tbm_mult8x8_1x4(
+    uint64_t a, uint64_t b[4], uint64_t out[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         out[i_prod] = tbm_mult8x8_u64(a, b[i_prod]);
 }
 
-void inline tbm_mult8x8_x4_u64(uint64_t a[4], uint64_t b[4], uint64_t out[4])
+static void inline tbm_mult8x8_x4(
+    uint64_t a[4], uint64_t b[4], uint64_t out[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         out[i_prod] = tbm_mult8x8_u64(a[i_prod], b[i_prod]);
 }
 
-void tbm_mult_u64_256(
+static void __attribute__ ((noinline)) tbm_mult_256(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
     tbm_mult_256_template(
-        in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_mult8x8_1x4_u64);
+        in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_mult8x8_1x4);
 }
 
-static void __attribute__ ((noinline)) tbm_mult_u64_ncol8_1(
+static void __attribute__ ((noinline)) tbm_mult_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
         out[i_mat] = tbm_mult8x8_u64(in[i_mat], in2[i_mat]);
 }
 
-static void __attribute__ ((noinline)) tbm_mult_u64_ncol8_2(
+static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -216,31 +220,32 @@ static void __attribute__ ((noinline)) tbm_mult_u64_ncol8_2(
     }
 }
 
-static void __attribute__ ((noinline)) tbm_mult_u64_ncol8_4(
+static void __attribute__ ((noinline)) tbm_mult_ncol8_4(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
-        tbm_mult32x32_template(in, in2, out, tbm_mult8x8_1x4_u64);
+        tbm_mult32x32_template(in, in2, out, tbm_mult8x8_1x4);
         in += 16;
         in2 += 16;
         out += 16;
     }
 }
 
-void tbm_mult_u64(
+void __SUFFIX(tbm_mult) (
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_col8_2 == 1))
-        return tbm_mult_u64_ncol8_1(in, n_mat, in2, out);
+        return tbm_mult_ncol8_1(in, n_mat, in2, out);
     if ((n_col8 == 2) && (n_row8 == 2) && (n_col8_2 == 2))
-        return tbm_mult_u64_ncol8_2(in, n_mat, in2, out);
+        return tbm_mult_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_col8_2 == 4))
-        return tbm_mult_u64_ncol8_4(in, n_mat, in2, out);
+        return tbm_mult_ncol8_4(in, n_mat, in2, out);
     
-    tbm_mult_u64_256(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
+    tbm_mult_256(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
 }
+
 //______________________________________________________________________________
 // multiply two 8x8 bit matrices with the second matrix transposed
 uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
@@ -261,7 +266,7 @@ uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
     return out;
 }
 
-uint64_t inline tbm_dot_t_u64(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
+uint64_t inline tbm_dot_t(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
 {
     uint64_t out = 0;
     for (uint8_t i_dot = 0; i_dot < n_dot; i_dot++)
@@ -269,7 +274,7 @@ uint64_t inline tbm_dot_t_u64(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
     return out;
 }
 
-void __attribute__ ((noinline)) tbm_mult_t_u64_ncol8_1(
+static void __attribute__ ((noinline)) tbm_mult_t_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2t, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -278,26 +283,26 @@ void __attribute__ ((noinline)) tbm_mult_t_u64_ncol8_1(
 
 #pragma GCC push_options //-----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
-void __attribute__ ((noinline)) tbm_mult_t_dot_u64(
+static void __attribute__ ((noinline)) tbm_mult_t_dot(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out)
 {
     tbm_mult_t_dot_template(
-        in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_dot_t_u64);
+        in, n_mat, n_row8, n_col8, in2, n_col8_2, out, tbm_dot_t);
 }
 
 #pragma GCC pop_options //------------------------------------------------------
 
-void tbm_mult_t_u64(
+void __SUFFIX(tbm_mult_t) (
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_row8_2, uint64_t *out)
 {
     if ((n_col8 == 1) && (n_row8 == 1) && (n_row8_2 == 1))
-        return tbm_mult_t_u64_ncol8_1(in, n_mat, in2, out);
+        return tbm_mult_t_ncol8_1(in, n_mat, in2, out);
     // if ((n_col8 == 2) && (n_row8 == 2) && (n_row8_2 == 2))
-    //     return tbm_mult_t_u64_ncol8_2(in, n_mat, in2, out);
+    //     return tbm_mult_t_ncol8_2(in, n_mat, in2, out);
     // if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
-    //     return tbm_mult_t_u64_ncol8_4(in, n_mat, in2, out);
+    //     return tbm_mult_t_ncol8_4(in, n_mat, in2, out);
     
-    tbm_mult_t_dot_u64(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
+    tbm_mult_t_dot(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
 }
