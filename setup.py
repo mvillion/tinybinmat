@@ -24,11 +24,19 @@ def src_from_name(name, cflag=None):
         out["cflags"] = cflag
     return out
 
-cflag = ["-O3", "-mavx2", "-mgfni"]
-lib_list = [
-    ("tinybinmat", src_from_name("tinybinmat", cflag=cflag)),
-    ("tinybinmat_avx2", src_from_name("tinybinmat_avx2", cflag=cflag)),
-    ("tinybinmat_gfnio", src_from_name("tinybinmat_gfnio", cflag=cflag)),
+cflag = ["-O3", "-mavx2"]
+lib_list = []
+for lib_name in ["tinybinmat", "tinybinmat_avx2"]:
+    lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
+
+cflag = ["-O3", "-mavx2", "-mgfni", "-DUSE_GFNI"]
+for lib_name in ["tinybinmat_gfnio"]:
+    lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
+# cflag = ["-O3", "-mavx2", "-mgfni", "-DUSE_GFNI"]
+# lib_list.append(
+#     ("tinybinmat_gfnio", src_from_name("tinybinmat_avx2", cflag=cflag)))
+
+lib_list += [
     ("tinybinmat_utils", {"sources": ["tinybinmat_utils.c"]} | inc_dir),
 ]
 
@@ -37,7 +45,7 @@ setup(
     ext_modules=[
         Extension(
             name="tinybinmat", sources=["tinybinmat_py.c"],
-            extra_compile_args=["-mavx2", "-mgfni"],
+            extra_compile_args=["-mavx2"],
             include_dirs=[this_file_path, numpy.get_include()],
             libraries=[k[0] for k in lib_list],
         ),

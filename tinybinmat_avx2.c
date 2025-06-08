@@ -6,7 +6,6 @@
 #define __SUFFIX(fun) fun##_gfni
 #else
 #define __SUFFIX(fun) fun##_avx2
-#endif
 
 void print_avx2_uint64(__m256i reg)
 {
@@ -28,6 +27,7 @@ __m256i _mm256_movm_epi8_avx2(const uint32_t mask)
     vmask = _mm256_or_si256(vmask, bit_mask);
     return _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
 }
+#endif
 
 //______________________________________________________________________________
 #if defined(USE_GFNI)
