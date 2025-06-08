@@ -36,10 +36,6 @@ for lib_name in ["tinybinmat_gfni"]:
 # lib_list.append(
 #     ("tinybinmat_gfni", src_from_name("tinybinmat_avx2", cflag=cflag)))
 
-lib_list += [
-    ("tinybinmat_utils", {"sources": ["tinybinmat_utils.c"]} | inc_dir),
-]
-
 setup(
     libraries=lib_list,
     ext_modules=[

@@ -31,25 +31,26 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
     int ok = PyArg_ParseTupleAndKeywords(
         arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, &format_str);
     if (!ok)
-        return failure(PyExc_RuntimeError, "failed to parse parameters");
+        return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
     if (arr_in == NULL) return NULL;
 
     if ((format_str == NULL) || (strcmp(format_str, "default") == 0))
     {
     }
     else
-        return failure(
+        return PyErr_Format(
             PyExc_RuntimeError, "format shall be 'default' (gfni)");
 
     int n_dim = PyArray_NDIM(arr_in);
     if (n_dim < 2)
-        return failure(PyExc_RuntimeError, "input need at least 2 dimension");
+        return PyErr_Format(
+            PyExc_RuntimeError, "input need at least 2 dimension");
     npy_intp n_col = PyArray_DIM(arr_in, n_dim-1);
     npy_intp n_row = PyArray_DIM(arr_in, n_dim-2);
 
     npy_intp size_type = PyArray_ITEMSIZE(arr_in);
     if (size_type != 1)
-        return failure(
+        return PyErr_Format(
             PyExc_RuntimeError, "input type size shall be equal to 1 octet");
 
     uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_col/n_row);
@@ -172,7 +173,7 @@ static PyObject* tbm_mult_template(
             fun[i_fun](in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
     }
     else
-        failure(PyExc_RuntimeError, "input type is not supported");
+        PyErr_Format(PyExc_RuntimeError, "input type is not supported");
 
     // decrease the reference count
     Py_DECREF(arr_in2);
@@ -264,7 +265,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
             (uint64_t *)PyArray_DATA(arr_in), n_mat, n_row, n_col, str01, out);
     }
     else
-        failure(PyExc_RuntimeError, "input type is not supported");
+        PyErr_Format(PyExc_RuntimeError, "input type is not supported");
 
         // decrease the reference count
     Py_DECREF(arr_in);
