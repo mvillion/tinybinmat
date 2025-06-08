@@ -197,9 +197,6 @@ void __attribute__ ((noinline)) tbm_mult_gfnio_256(
 static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
-#if defined(USE_DOT)
-    tbm_mult_t_dot_gfnio(in, n_mat, 1, 1, in2, 1, out);
-#else
     uint64_t i8x8; //!< index for 4 8x8 blocks
     for (i8x8 = 0; i8x8 < n_mat/4*4; i8x8 += 4)
     {
@@ -219,15 +216,11 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_1(
     _mm256_maskstore_epi64(
         (long long int *)(out+i8x8), mask, 
         tbm_mult8x8_m256i_gfnio(in8x8_4, in2_8x8_4));
-#endif
 }
 
 static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_2(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
-#if defined(USE_DOT)
-    tbm_mult_t_dot_gfnio(in, n_mat, 2, 2, in2, 2, out);
-#else
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
         __m256i in16X16 = _mm256_loadu_si256((__m256i *)in);
@@ -238,16 +231,12 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_2(
         in2 += 4;
         out += 4;
     }
-#endif
 }
 
 #if 1 // this code is faster than the one below
 static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
-#if defined(USE_DOT)
-    tbm_mult_t_dot_gfnio(in, n_mat, 4, 4, in2, 4, out);
-#else
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
         __m256i in8x32[4];
@@ -264,7 +253,6 @@ static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
         in2 += 16;
         out += 16;
     }
-#endif
 }
 #else
 static void __attribute__ ((noinline)) tbm_mult_gfnio_ncol8_4(
