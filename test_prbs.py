@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import numpy as np
+import tinybinmat as tbm
 
 from time import time
 
@@ -177,43 +178,72 @@ def l1ca_prbs_32bit(poly, out_len, x_status):
     return y.reshape(-1)[:out_len]
 
 
+def compute_tiny_power32(poly, mat_size, ext_size):
+    mat = l1ca_gf_matrix(poly, mat_size)
+
+    mat_20x20 = np.fliplr(np.rot90(mat))
+
+    n_ext = ext_size-mat_size
+    mat = np.zeros((ext_size, ext_size), np.uint32)
+    mat[-mat_size:, -mat_size:] = mat_20x20
+    mat[:n_ext, 1:n_ext+1] = np.eye(n_ext, dtype=np.uint8)
+
+    tiny = tbm.encode(mat.astype(np.uint8))
+
+    tiny32 = tiny
+    for i_pow in range(5):
+        tiny32 = tbm.mult(tiny32, tiny32)
+    return tiny32
+
+
 def l1ca_tiny_32bit(poly, out_len, x_status):
     mat_size = 2*10  # (2**10-1)
     ext_size = 32
-    import tinybinmat as tbm
 
     try:
         tiny32 = global_mat["tiny32"]
     except KeyError:
-        mat = l1ca_gf_matrix(poly, mat_size)
-
-        mat_20x20 = np.fliplr(np.rot90(mat))
-
-        n_ext = ext_size-mat_size
-        mat = np.zeros((ext_size, ext_size), np.uint32)
-        mat[-mat_size:, -mat_size:] = mat_20x20
-        mat[:n_ext, 1:n_ext+1] = np.eye(n_ext, dtype=np.uint8)
-
-        tiny = tbm.encode(mat.astype(np.uint8))
-
-        tiny32 = tiny
-        for i_pow in range(5):
-            tiny32 = tbm.mult(tiny32, tiny32)
-
+        tiny32 = compute_tiny_power32(poly, mat_size, ext_size)
         global_mat["tiny32"] = tiny32
 
     # use matrix for x_status as vector is not supported yet
-    x_status_square = np.zeros((ext_size, ext_size), np.uint8)
-    x_status_square[:, 0] = x_status
-    x_status_square = tbm.encode(x_status_square)
+    x_status32x8 = tbm.encode(x_status.reshape(-1, 1))
     n_step = out_len
     n_step += ext_size-1
     n_step //= ext_size
-    y = np.zeros((n_step, ext_size), dtype=bool)
-    for i in range(n_step):
-        y[i] = x_status_square
-        x_status_square = tbm.mult(tiny32, x_status_square)
+    y = np.zeros((n_step,)+x_status32x8.shape, np.uint64)
+    for i_step in range(n_step):
+        y[i_step, :, :] = x_status32x8
+        x_status32x8 = tbm.mult(tiny32, x_status32x8)
+    y = tbm.sprint(y, ext_size, 1, np.arange(2, dtype=np.uint8))
     return y.reshape(-1)[:out_len]
+
+
+def l1ca_tiny_256bit(poly, out_len, x_status):
+    mat_size = 2*10  # (2**10-1)
+    ext_size = 32
+
+    try:
+        tiny32 = global_mat["tiny32"]
+    except KeyError:
+        tiny32 = compute_tiny_power32(poly, mat_size, ext_size)
+        global_mat["tiny32"] = tiny32
+
+    # use matrix for x_status as vector is not supported yet
+    x_status32x8 = tbm.encode(x_status.reshape(-1, 1))
+    n_step = out_len
+    n_step += 8*ext_size-1
+    n_step //= ext_size*8
+    y = np.zeros((n_step,)+x_status32x8.shape, np.uint64)
+    for n_8 in [1, 2, 4]:
+        x_status32x8 |= tbm.mult(tiny32, x_status32x8) << n_8
+        tiny32 = tbm.mult(tiny32, tiny32)
+    y[0, :, :] = x_status32x8
+    for i_step in range(1, n_step):
+        x_status32x8 = tbm.mult(tiny32, x_status32x8)
+        y[i_step, :, :] = x_status32x8
+    y = tbm.sprint(y, ext_size, 8, np.arange(2, dtype=np.uint8))
+    return y.transpose(0, 2, 1).reshape(-1)[:out_len]
 
 
 if __name__ == "__main__":
@@ -227,7 +257,7 @@ if __name__ == "__main__":
 
     test_fun_list = [
         gf_div, l1ca_gf_1bit, l1ca_prbs_1bit, l1ca_prbs_20bit,
-        l1ca_prbs_32bit, l1ca_tiny_32bit]
+        l1ca_prbs_32bit, l1ca_tiny_32bit, l1ca_tiny_256bit]
 
     for test_fun in test_fun_list:
         t0 = time()
