@@ -30,12 +30,13 @@ def test_ok(ok_list, test_str):
     ko_code = colored("✗", "red")
     print_list = ["%20s" % test_str]
     for tup in ok_list:
-        if type(tup) is tuple:
-            ok, speed = tup
-        else:
-            ok, speed = tup, None
+        if type(tup) is not tuple:
+            tup = tup, None, None
+        ok, speed, duration = tup
         if speed is not None:
             print_list.append("%5.1f" % speed)
+        if speed is not None:
+            print_list.append("(%5.1f)" % (duration*1e3))
         print_list.append(ok_code if ok else ko_code)
 
     print(" ".join(print_list))
@@ -49,7 +50,7 @@ def test_encode(mat, n_bit):
     encode = tbm.encode(mat)
     decode_gfni = tbm.sprint(
         encode, n_bit, n_bit, np.arange(2, dtype=np.uint8))
-    ok_list.append((np.array_equal(decode_gfni, mat), None))
+    ok_list.append((np.array_equal(decode_gfni, mat)))
 
     test_ok(ok_list, "encode%d" % n_bit)
 
@@ -76,7 +77,7 @@ def test_mult(mat8, matb8, n_bit):
         prod = tbm.sprint(
             prod, n_bit, n_bit, np.arange(2, dtype=np.uint8))
         speed = ref_duration/duration
-        ok_list.append((np.array_equal(ref, prod), speed))
+        ok_list.append((np.array_equal(ref, prod), speed, duration))
 
     test_ok(ok_list, "mult%d" % n_bit)
 
@@ -102,7 +103,7 @@ def test_mult_t(mat8, matb8, n_bit):
 
         prod = tbm.sprint(prod, n_bit, n_bit, np.arange(2, dtype=np.uint8))
         speed = ref_duration/duration
-        ok_list.append((np.array_equal(ref, prod), speed))
+        ok_list.append((np.array_equal(ref, prod), speed, duration))
 
     test_ok(ok_list, "mult_t%d" % n_bit)
 
@@ -126,7 +127,7 @@ def test_transpose(mat8, n_bit):
 
         mat8t = tbm.sprint(mat8t, n_bit, n_bit, np.arange(2, dtype=np.uint8))
         speed = ref_duration/duration
-        ok_list.append((np.array_equal(ref, mat8t), speed))
+        ok_list.append((np.array_equal(ref, mat8t), speed, duration))
 
     test_ok(ok_list, "transpose%d" % n_bit)
 
