@@ -23,7 +23,7 @@ __m256i _mm256_movm_epi8_avx2(const uint32_t mask)
 }
 
 //______________________________________________________________________________
-__m256i inline inline tbm_transpose8x8_m256i_avx2(__m256i in8x8_4)
+static __m256i inline tbm_transpose8x8_m256i(__m256i in8x8_4)
 {
     __m256i ur_mask4x4 = _mm256_set1_epi64x(0xf0f0f0f000000000);
     __m256i xor = _mm256_xor_si256(in8x8_4, _mm256_slli_epi64(in8x8_4, 36));
@@ -46,30 +46,30 @@ __m256i inline inline tbm_transpose8x8_m256i_avx2(__m256i in8x8_4)
     return in8x8_4;
 }
 
-void inline inline tbm_transpose8x8_x4_avx2(uint64_t in[4])
+static void inline inline tbm_transpose8x8_x4(uint64_t in[4])
 {
     __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)in);
-    _mm256_storeu_si256((__m256i *)in, tbm_transpose8x8_m256i_avx2(in8x8_4));
+    _mm256_storeu_si256((__m256i *)in, tbm_transpose8x8_m256i(in8x8_4));
 }
 
-static void __attribute__ ((noinline)) tbm_transpose_1d(
-    uint64_t *in, uint64_t n_mat, uint64_t *out)
+static __attribute__ ((noinline)) void tbm_transpose_1d(
+    uint64_t *in, uint64_t n8x8, uint64_t *out)
 {
-    uint64_t i_mat;
+    uint64_t i8x8;
     uint64_t tmp[4]; //!< temporary storage for 4 8x8 blocks
-    for (i_mat = 0; i_mat < n_mat/4*4; i_mat += 4)
+    for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
     {
         for (uint8_t i_4 = 0; i_4 < 4; i_4++)
-            out[i_mat+i_4] = in[i_mat+i_4];
-        tbm_transpose8x8_x4_avx2(out+i_mat);
+            out[i8x8+i_4] = in[i8x8+i_4];
+        tbm_transpose8x8_x4(out+i8x8);
     }
-    if (i_mat == n_mat)
+    if (i8x8 == n8x8)
         return; // all blocks are processed
-    for (uint8_t i_4 = 0; i_4 < (n_mat & 3); i_4++)
-        tmp[i_4] = in[i_mat+i_4];
-    tbm_transpose8x8_x4_avx2(tmp);
-    for (uint8_t i_4 = 0; i_4 < (n_mat & 3); i_4++)
-        out[i_mat+i_4] = tmp[i_4];
+    for (uint8_t i_4 = 0; i_4 < (n8x8 & 3); i_4++)
+        tmp[i_4] = in[i8x8+i_4];
+    tbm_transpose8x8_x4(tmp);
+    for (uint8_t i_4 = 0; i_4 < (n8x8 & 3); i_4++)
+        out[i8x8+i_4] = tmp[i_4];
 }
 
 static __attribute__ ((noinline)) void tbm_transpose_2x2(
@@ -80,7 +80,7 @@ static __attribute__ ((noinline)) void tbm_transpose_2x2(
         // load 4x8x8 blocks
         __m256i in8x8_4 = _mm256_loadu_si256(in+i_mat);
         // transpose 4x8x8 blocks
-        __m256i a3210r = tbm_transpose8x8_m256i_avx2(in8x8_4);
+        __m256i a3210r = tbm_transpose8x8_m256i(in8x8_4);
         __m256i a3120r = _mm256_permute4x64_epi64(
             a3210r, _MM_SHUFFLE(3, 1, 2, 0));
     
@@ -109,10 +109,10 @@ static __attribute__ ((noinline)) void tbm_transpose_4x4(
         __m256i inea62 = _mm256_unpacklo_epi64(inba32, infe76);
         __m256i infb73 = _mm256_unpackhi_epi64(inba32, infe76);
 
-        _mm256_storeu_si256(out+i_mat*4+0, tbm_transpose8x8_m256i_avx2(inc840));
-        _mm256_storeu_si256(out+i_mat*4+1, tbm_transpose8x8_m256i_avx2(ind951));
-        _mm256_storeu_si256(out+i_mat*4+2, tbm_transpose8x8_m256i_avx2(inea62));
-        _mm256_storeu_si256(out+i_mat*4+3, tbm_transpose8x8_m256i_avx2(infb73));
+        _mm256_storeu_si256(out+i_mat*4+0, tbm_transpose8x8_m256i(inc840));
+        _mm256_storeu_si256(out+i_mat*4+1, tbm_transpose8x8_m256i(ind951));
+        _mm256_storeu_si256(out+i_mat*4+2, tbm_transpose8x8_m256i(inea62));
+        _mm256_storeu_si256(out+i_mat*4+3, tbm_transpose8x8_m256i(infb73));
     }
 }
 
@@ -123,7 +123,7 @@ static void __attribute__ ((noinline)) tbm_transpose_256(
     uint64_t *out)
 {
     tbm_transpose_256_template(
-        in, n_mat, n_row8, n_col8, out, tbm_transpose8x8_x4_avx2);
+        in, n_mat, n_row8, n_col8, out, tbm_transpose8x8_x4);
 }
 
 #pragma GCC pop_options //-----------------------------------------------------
@@ -150,7 +150,7 @@ void tbm_transpose_avx2(
 }
 
 //______________________________________________________________________________
-__m256i inline tbm_mult8x8_m256i_avx2(__m256i a, __m256i b)
+static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
 {
     __m128i repeat8x2 = _mm_set_epi8(
         8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -173,21 +173,23 @@ __m256i inline tbm_mult8x8_m256i_avx2(__m256i a, __m256i b)
     return out;
 }
 
-void inline tbm_mult8x8_1x4_avx2(uint64_t a, uint64_t b[4], uint64_t out[4])
+static void inline tbm_mult8x8_1x4_avx2(
+    uint64_t a, uint64_t b[4], uint64_t out[4])
 {
     __m256i _a = _mm256_set1_epi64x(a);
     __m256i _b = _mm256_loadu_si256((__m256i *)b);
-    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i_avx2(_a, _b)); 
+    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i(_a, _b)); 
 }
 
-void inline tbm_mult8x8_x4_avx2(uint64_t a[4], uint64_t b[4], uint64_t out[4])
+static void inline tbm_mult8x8_x4_avx2(
+    uint64_t a[4], uint64_t b[4], uint64_t out[4])
 {
     __m256i _a = _mm256_loadu_si256((__m256i *)a);
     __m256i _b = _mm256_loadu_si256((__m256i *)b);
-    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i_avx2(_a, _b)); 
+    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i(_a, _b)); 
 }
 
-__m256i inline tbm_mult16x16_m256i_avx2(__m256i a3210, __m256i b3210)
+static __m256i inline tbm_mult16x16_m256i(__m256i a3210, __m256i b3210)
 {
     // a is:    b is:
     // [0, 1]   [0, 1]   [0, 0]   [0, 1]   [1, 1]   [2, 3]
@@ -198,8 +200,7 @@ __m256i inline tbm_mult16x16_m256i_avx2(__m256i a3210, __m256i b3210)
     __m256i b1010 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(1, 0, 1, 0));
 
     return _mm256_xor_si256(
-        tbm_mult8x8_m256i_avx2(a3311, b3232),
-        tbm_mult8x8_m256i_avx2(a2200, b1010));
+        tbm_mult8x8_m256i(a3311, b3232), tbm_mult8x8_m256i(a2200, b1010));
 }
 
 #pragma GCC push_options //-----------------------------------------------------
@@ -221,8 +222,7 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_1(
         __m256i in8x8_4 = _mm256_loadu_si256((__m256i *)(in+i8x8));
         __m256i in2_8x8_4 = _mm256_loadu_si256((__m256i *)(in2+i8x8));
         _mm256_storeu_si256(
-            (__m256i *)(out+i8x8),
-            tbm_mult8x8_m256i_avx2(in8x8_4, in2_8x8_4));
+            (__m256i *)(out+i8x8), tbm_mult8x8_m256i(in8x8_4, in2_8x8_4));
     }
 
     if (i8x8 == n_mat)
@@ -233,7 +233,7 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_1(
     mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_mat-i8x8), mask);
     _mm256_maskstore_epi64(
         (long long int *)(out+i8x8), mask, 
-        tbm_mult8x8_m256i_avx2(in8x8_4, in2_8x8_4));
+        tbm_mult8x8_m256i(in8x8_4, in2_8x8_4));
 }
 
 static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
@@ -244,7 +244,7 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
         __m256i in16X16 = _mm256_loadu_si256((__m256i *)in);
         __m256i in2_16X16 = _mm256_loadu_si256((__m256i *)in2);
         _mm256_storeu_si256(
-            (__m256i *)out, tbm_mult16x16_m256i_avx2(in16X16, in2_16X16));
+            (__m256i *)out, tbm_mult16x16_m256i(in16X16, in2_16X16));
         in += 4;
         in2 += 4;
         out += 4;
@@ -326,9 +326,9 @@ uint64_t inline tbm_mult_t8x8_dot_avx2(uint64_t a8x8, uint64_t tb8x8)
     return out;
 }
 
-__m256i inline tbm_mult_t8x8_m256i_avx2(__m256i a, __m256i b)
+static __m256i inline tbm_mult_t8x8_m256i(__m256i a, __m256i b)
 {
-    return tbm_mult8x8_m256i_avx2(a, tbm_transpose8x8_m256i_avx2(b));
+    return tbm_mult8x8_m256i(a, tbm_transpose8x8_m256i(b));
 }
 
 uint64_t inline tbm_dot_t_avx2(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
@@ -339,7 +339,7 @@ uint64_t inline tbm_dot_t_avx2(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
     return out;
 }
 
-__m256i inline tbm_mult_t16x16_m256i_avx2(__m256i a3210, __m256i b3210)
+static __m256i inline tbm_mult_t16x16_m256i(__m256i a3210, __m256i b3210)
 {
     // a is:    b.T is:
     // [0, 1]   [0, 2]   [0, 0]   [0, 2]   [1, 1]   [1, 3]
@@ -349,14 +349,11 @@ __m256i inline tbm_mult_t16x16_m256i_avx2(__m256i a3210, __m256i b3210)
     __m256i b3131 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(3, 1, 3, 1));
     __m256i b2020 = _mm256_permute4x64_epi64(b3210, _MM_SHUFFLE(2, 0, 2, 0));
 
-    __m256i out = _mm256_xor_si256(
-        tbm_mult_t8x8_m256i_avx2(a3311, b3131),
-        tbm_mult_t8x8_m256i_avx2(a2200, b2020));
-
-    return out;
+    return _mm256_xor_si256(
+        tbm_mult_t8x8_m256i(a3311, b3131), tbm_mult_t8x8_m256i(a2200, b2020));
 }
 
-void inline tbm_mult_t32x32_m256i_avx2(__m256i a[4], __m256i b[4])
+static void inline tbm_mult_t32x32_m256i(__m256i a[4], __m256i b[4])
 {
     __m256i b_3210 = b[0];
     __m256i b_7654 = b[1];
@@ -384,22 +381,22 @@ void inline tbm_mult_t32x32_m256i_avx2(__m256i a[4], __m256i b[4])
         out = _mm256_setzero_si256();
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(0, 0, 0, 0));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_c840);
+        prod = tbm_mult_t8x8_m256i(repeat, b_c840);
         out = _mm256_xor_si256(out, prod);
 
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(1, 1, 1, 1));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_d951);
+        prod = tbm_mult_t8x8_m256i(repeat, b_d951);
         out = _mm256_xor_si256(out, prod);
 
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(2, 2, 2, 2));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_ea62);
+        prod = tbm_mult_t8x8_m256i(repeat, b_ea62);
         out = _mm256_xor_si256(out, prod);
 
         // repeat = _mm256_permute4x64_epi64(a3210, _MM_SHUFFLE(3, 3, 3, 3));
         repeat = _mm256_set1_epi64x(*a64++);
-        prod = tbm_mult_t8x8_m256i_avx2(repeat, b_fb73);
+        prod = tbm_mult_t8x8_m256i(repeat, b_fb73);
         out = _mm256_xor_si256(out, prod);
 
         a[i_row] = out;
@@ -426,7 +423,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_ncol8_1(
         __m256i in2_8x8_4 = _mm256_loadu_si256((__m256i *)(in2+i8x8));
         _mm256_storeu_si256(
             (__m256i *)(out+i8x8),
-            tbm_mult_t8x8_m256i_avx2(in8x8_4, in2_8x8_4));
+            tbm_mult_t8x8_m256i(in8x8_4, in2_8x8_4));
     }
 
     if (i8x8 == n_mat)
@@ -437,7 +434,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_ncol8_1(
     mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_mat-i8x8), mask);
     _mm256_maskstore_epi64(
         (long long int *)(out+i8x8), mask, 
-        tbm_mult_t8x8_m256i_avx2(in8x8_4, in2_8x8_4));
+        tbm_mult_t8x8_m256i(in8x8_4, in2_8x8_4));
 }
 
 static void __attribute__ ((noinline)) tbm_mult_t_ncol8_2(
@@ -451,7 +448,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_ncol8_2(
         __m256i in16X16 = _mm256_loadu_si256((__m256i *)in);
         __m256i in2_16X16 = _mm256_loadu_si256((__m256i *)in2);
         _mm256_storeu_si256(
-            (__m256i *)out, tbm_mult_t16x16_m256i_avx2(in16X16, in2_16X16));
+            (__m256i *)out, tbm_mult_t16x16_m256i(in16X16, in2_16X16));
         in += 4;
         in2 += 4;
         out += 4;
@@ -474,7 +471,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_ncol8_4(
             in8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in)+i_8row);
             in2_8x32[i_8row] = _mm256_loadu_si256(((__m256i *)in2)+i_8row);
         }
-        tbm_mult_t32x32_m256i_avx2(in8x32, in2_8x32);
+        tbm_mult_t32x32_m256i(in8x32, in2_8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
         in += 16;
