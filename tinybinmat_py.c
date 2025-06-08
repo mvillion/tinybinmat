@@ -12,12 +12,20 @@ uint8_t parse_method_str(const char *method_str)
     }
     else if (strcmp(method_str, "avx2") == 0)
     {
-        i_fun = 1;
+        i_fun = __builtin_cpu_supports("avx2") ? 1 : 0xff;
     }
     else if (strcmp(method_str, "gfni") == 0)
     {
-        i_fun = 2;
+        i_fun = __builtin_cpu_supports("gfni") ? 2 : 0xff;
     }
+    else
+        PyErr_Format(
+            PyExc_RuntimeError,
+            "method string shall be 'avx2', 'gfni', or 'default'");
+    if (i_fun == 0xff)
+        PyErr_Format(
+            PyExc_RuntimeError,
+            "%s instruction set is not supported by the CPU", method_str);
     return i_fun;    
 }
 
@@ -100,9 +108,7 @@ static PyObject* tbm_mult_template(
 
     uint8_t i_fun = parse_method_str(method_str);
     if (i_fun == 0xff)
-        return PyErr_Format(
-            PyExc_RuntimeError,
-            "method string shall be 'avx2', 'gfni', or 'default'");
+        return NULL;
     i_fun += is_transposed ? 3 : 0;
 
     // create output dimensions
@@ -287,9 +293,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
 
     uint8_t i_fun = parse_method_str(method_str);
     if (i_fun == 0xff)
-        return PyErr_Format(
-            PyExc_RuntimeError,
-            "method string shall be 'avx2', 'gfni', or 'default'");
+        return NULL;
 
     // create output dimensions
     int n_dim = PyArray_NDIM(arr_in);

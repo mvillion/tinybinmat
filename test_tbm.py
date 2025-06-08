@@ -25,14 +25,15 @@ method_list = ["default", "avx2", "gfni"]
 
 def test_ok(ok_list, test_str):
     if type(ok_list) is not list:
-        if type(ok_list) is not tuple:
-            ok_list = (ok_list, None)
         ok_list = [ok_list]
     ok_code = colored("✓", "green")
     ko_code = colored("✗", "red")
     print_list = ["%20s" % test_str]
     for tup in ok_list:
-        ok, speed = tup
+        if type(tup) is tuple:
+            ok, speed = tup
+        else:
+            ok, speed = tup, None
         if speed is not None:
             print_list.append("%5.1f" % speed)
         print_list.append(ok_code if ok else ko_code)
@@ -64,9 +65,13 @@ def test_mult(mat8, matb8, n_bit):
 
     ok_list = []
     for method in method_list:
-        t0 = time()
-        prod = tbm.mult(encode, encodeb, method=method)
-        duration = time()-t0
+        try:
+            t0 = time()
+            prod = tbm.mult(encode, encodeb, method=method)
+            duration = time()-t0
+        except RuntimeError:
+            ok_list.append(False)
+            continue
 
         prod = tbm.sprint(
             prod, n_bit, n_bit, np.arange(2, dtype=np.uint8))
@@ -87,9 +92,13 @@ def test_mult_t(mat8, matb8, n_bit):
 
     ok_list = []
     for method in method_list:
-        t0 = time()
-        prod = tbm.mult_t(encode, encodeb, method=method)
-        duration = time()-t0
+        try:
+            t0 = time()
+            prod = tbm.mult_t(encode, encodeb, method=method)
+            duration = time()-t0
+        except RuntimeError:
+            ok_list.append(False)
+            continue
 
         prod = tbm.sprint(prod, n_bit, n_bit, np.arange(2, dtype=np.uint8))
         speed = ref_duration/duration
@@ -107,9 +116,13 @@ def test_transpose(mat8, n_bit):
 
     ok_list = []
     for method in method_list:
-        t0 = time()
-        mat8t = tbm.transpose(encode, method=method)
-        duration = time()-t0
+        try:
+            t0 = time()
+            mat8t = tbm.transpose(encode, method=method)
+            duration = time()-t0
+        except RuntimeError:
+            ok_list.append(False)
+            continue
 
         mat8t = tbm.sprint(mat8t, n_bit, n_bit, np.arange(2, dtype=np.uint8))
         speed = ref_duration/duration
