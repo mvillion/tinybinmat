@@ -2,9 +2,10 @@
 Library for tiny bit matrix manipulation
 Bit matrices operate on GF2.
 The library is written in C with Python bindings.
-8x8, 16x16 and 32x32-bit matrices are supported with optimizations in AVX2.
-A 16x16 bit matrix fits into a single AVX2 thus it can be expected that a few operations can be necessary to perform a transposition, multiplication or matrix inversion.
-AVX512 proposes _mm512_gf2p8affine_epi64_epi8 instruction that can perform 8 8x8 multiplication in a single instruction.
+
+All matrices size are supported with special optimizations for 8x8, 16x16
+and 32x32-bit matrices.
+AVX2 and GFNI can be used on processors that support these instructions.
 
 # I. installation
 
@@ -26,30 +27,31 @@ or without virtual-env:
 
 # III. details
 
-## III.1. bit order
+## III.1. bit order encoding
+After initial investigations with 16x16 and 32x32 bit encodings, the dramatic improvement shown using GFNI instruction proved that 8x8 encoding is the best encoding for processors supporting GFNI instructions.
+(For other processors 16x16 encoding would likely be more efficient.)
 
-For a 16x16 matrix of 256 bits, chosen order is 16 rows of uint16.
-The 1st bit in each row is the LSB of uint16.
-Order of bits in row may appear as reversed compared to a decoded matrix of uint8 with 1 bit in each octet but as long as encoding is consistent, a reverse encoding may yield the same results.
-
-Preferred matrix dimension order is C order.
-The last dimension is 8, 16 or 32 bit long.
-A consequence of this choice is that a single dimension vector can only be encoded as a row vector.
-Matrix by vectors operations can only be:
-- A<ins>y</ins><sup>T</sup> or A[<ins>y</ins><sub>1</sub>; <ins>y</ins><sub>2</sub>; ... ; <ins>y</ins><sub>N</sub>]<sup>T</sup>
-
-or
-
-- <ins>y</ins>A or [<ins>y</ins><sub>1</sub>; <ins>y</ins><sub>2</sub>; ... ; <ins>y</ins><sub>N</sub>]A
-
-If chosen order were 16 columns of uint16, products like A<ins>y</ins> with <ins>y</ins> as a column vector would be possible.
-
-Transposition function converts one choice to the other.
-
-### III.1.a GFNI bit order
-
-For unknown reasons GFNI instructions use little endian order for rows (8 bits in octets) and also for columns.
+GFNI instructions use little endian order for rows (8 bits in octets) and also for columns.
 The 1st octet of the matrix is its last row.
+Order of bits is thus:
+| 63 | 62 | 61 | 60 | 59 | 58 | 57 | 56 |
+| 55 | 54 | 53 | 52 | 51 | 50 | 49 | 48 |
+| 47 | 46 | 45 | 44 | 43 | 42 | 41 | 40 |
+| 39 | 38 | 37 | 36 | 35 | 34 | 33 | 32 |
+| 31 | 30 | 29 | 28 | 27 | 26 | 25 | 24 |
+| 23 | 22 | 21 | 20 | 19 | 18 | 17 | 16 |
+| 15 | 14 | 13 | 12 | 11 | 10 |  9 |  8 |
+|  7 |  6 |  5 |  4 |  3 |  2 |  1 |  0 |
+
+This weird order is likely due to the fact that transposition of the matrix maintains little endian order.
+
+For a matrix of size 10x20, the encoded dimension is 2x3
+| A<sub>00</sub> | A<sub>01</sub> | A<sub>02</sub> |
+| A<sub>10</sub> | A<sub>11</sub> | A<sub>12</sub> |
+
+Matrix A<sub>02</sub> and A<sub>12</sub> have the last 4 columns with 0.
+Matrix A<sub>10</sub> to A<sub>12</sub> have the last 6 rows with 0.
+
 
 ## III.2. supported operations
 
