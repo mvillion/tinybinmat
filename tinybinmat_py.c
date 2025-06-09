@@ -12,11 +12,15 @@ uint8_t parse_method_str(const char *method_str)
     }
     else if (strcmp(method_str, "avx2") == 0)
     {
+#if defined(__x86_64__) || defined(_M_X64)
         i_fun = __builtin_cpu_supports("avx2") ? 1 : 0xff;
+#endif
     }
     else if (strcmp(method_str, "gfni") == 0)
     {
+#if defined(__x86_64__) || defined(_M_X64)
         i_fun = __builtin_cpu_supports("gfni") ? 2 : 0xff;
+#endif
     }
     else
         PyErr_Format(

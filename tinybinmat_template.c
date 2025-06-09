@@ -57,8 +57,6 @@ static void inline tbm_mult_256_template(
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out, 
     tbm_mult8x8_1x4_fun_t *mult1x4_fun)
 {
-    __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
-    mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_col8_2-n_col8_2/4*4), mask);
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
         uint64_t *in_mat = in + i_mat*n_row8*n_col8;
