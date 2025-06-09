@@ -1,7 +1,6 @@
 #if !defined(_TINYBITMAT)
 #define _TINYBITMAT
 #include "math.h"
-#include "immintrin.h"
 #include "stdbool.h"
 #include "stdint.h"
 #include "stdio.h"
@@ -11,8 +10,6 @@
 #else
 #define __UNUSED__ __attribute__((unused))
 #endif
-extern void print_avx2_uint64(__m256i reg);
-
 void tbm_encode_gfnio(
     uint8_t *in, uint64_t n_mat, uint32_t n_row, uint32_t n_col, uint64_t *out);
 

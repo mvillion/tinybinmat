@@ -1,3 +1,4 @@
+#include "immintrin.h"
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
