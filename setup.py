@@ -25,6 +25,7 @@ def src_from_name(name, cflag=None):
         out["cflags"] = cflag
     return out
 
+
 cflag = ["-O3"]
 extra_cflag = []
 lib_list = []
@@ -33,17 +34,17 @@ if machine() in ["aarch64"]:
     for lib_name in ["tinybinmat"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 else:
-    cflag += ["-mavx2"]
+    cflag = cflag+["-mavx2"]
     for lib_name in ["tinybinmat", "tinybinmat_avx2"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 
-    cflag += ["-mgfni", "-DUSE_GFNI"]
+    cflag = cflag+["-mgfni", "-DUSE_GFNI"]
     for lib_name in ["tinybinmat_gfni"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
     # cflag = ["-O3", "-mavx2", "-mgfni", "-DUSE_GFNI"]
     # lib_list.append(
     #     ("tinybinmat_gfni", src_from_name("tinybinmat_avx2", cflag=cflag)))
-    extra_cflag += ["-mavx2"]
+    extra_cflag = extra_cflag+["-mavx2"]
 
 setup(
     libraries=lib_list,
