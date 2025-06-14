@@ -62,7 +62,6 @@ setup(
             name="tinybinmat", sources=["tinybinmat_py.c"],
             extra_compile_args=extra_cflag,
             include_dirs=[this_file_path, numpy.get_include()],
-            libraries=[k[0] for k in lib_list],
         ),
     ],
     setup_requires=["setuptools-git-versioning"]

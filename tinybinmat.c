@@ -1,7 +1,7 @@
 #if defined(USE_SIMD)
-#define __SUFFIX(fun) fun##_u64
-#else
 #define __SUFFIX(fun) fun##_simd
+#else
+#define __SUFFIX(fun) fun##_u64
 #endif
 
 #include "tinybinmat.h"
