@@ -25,12 +25,18 @@ def src_from_name(name, cflag=None):
         out["cflags"] = cflag
     return out
 
+is_aarch64 = machine() in ["aarch64"]
+force_aarch64 = not True
+if force_aarch64:
+    is_aarch64 = True
+    os.environ["CC"] = "arm-none-eabi-gcc"
 
 cflag = ["-O3"]
 extra_cflag = []
 lib_list = []
 
-if machine() in ["aarch64"]:
+if is_aarch64:
+    cflag = cflag+["-march=armv8-a+simd"]
     for lib_name in ["tinybinmat"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 else:

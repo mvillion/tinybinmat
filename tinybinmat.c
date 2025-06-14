@@ -109,11 +109,26 @@ uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
     return in8x8;
 }
 
+//#define USE_SIMD
+#if defined(USE_SIMD)
+static void inline tbm_transpose8x8_x2(uint64_t in[2])
+{
+    for (uint8_t i_prod = 0; i_prod < 2; i_prod++)
+        in[i_prod] = tbm_transpose8x8_u64(in[i_prod]);
+}
+
+static void inline tbm_transpose8x8_x4(uint64_t in[4])
+{
+    for (uint8_t i_prod = 0; i_prod < 4; i_prod += 2)
+        tbm_transpose8x8_x2(in+i_prod);
+}
+#else
 static void inline tbm_transpose8x8_x4(uint64_t in[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         in[i_prod] = tbm_transpose8x8_u64(in[i_prod]);
 }
+#endif
 
 static __attribute__ ((noinline)) void tbm_transpose_1d(
     uint64_t *in, uint64_t n8x8, uint64_t *out)
