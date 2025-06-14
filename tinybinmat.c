@@ -1,8 +1,13 @@
+#if defined(USE_SIMD)
+#define __SUFFIX(fun) fun##_u64
+#else
+#define __SUFFIX(fun) fun##_simd
+#endif
+
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
-#define __SUFFIX(fun) fun##_u64
-
+#if !defined(USE_SIMD)
 void tbm_encode_gfnio(
     uint8_t *in, uint64_t n_mat, uint32_t n_row, uint32_t n_col, uint64_t *out)
 {
@@ -39,7 +44,7 @@ void tbm_encode_gfnio(
         {
             // clear unused bits in the last columns
             uint64_t zero_mask = -1; //!< mask for the last row
-            zero_mask <<= n_zero_row*8; 
+            zero_mask <<= n_zero_row*8;
             out[((i_mat+1)*n_octet_row-1)*n_octet_col+i_ocol] &= zero_mask;
         }
     }
@@ -76,6 +81,7 @@ void tbm_sprint8_gfnio(
         }
     }
 }
+#endif
 
 //______________________________________________________________________________
 uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
@@ -140,7 +146,7 @@ static __attribute__ ((noinline)) void tbm_transpose_1d(
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 static void __attribute__ ((noinline)) tbm_transpose_256(
-    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *out)
 {
     tbm_transpose_256_template(
@@ -148,7 +154,7 @@ static void __attribute__ ((noinline)) tbm_transpose_256(
 }
 
 void __SUFFIX(tbm_transpose) (
-    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *out)
 {
     if (n_row8 == 1 || n_col8 == 1)
@@ -257,7 +263,7 @@ void __SUFFIX(tbm_mult) (
         return tbm_mult_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_col8_2 == 4))
         return tbm_mult_ncol8_4(in, n_mat, in2, out);
-    
+
     tbm_mult_256(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
 }
 
@@ -318,6 +324,6 @@ void __SUFFIX(tbm_mult_t) (
     //     return tbm_mult_t_ncol8_2(in, n_mat, in2, out);
     // if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
     //     return tbm_mult_t_ncol8_4(in, n_mat, in2, out);
-    
+
     tbm_mult_t_dot(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
 }

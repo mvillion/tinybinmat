@@ -18,15 +18,27 @@ void tbm_sprint8_gfnio(
     uint8_t *out);
 
 typedef void tbm_transpose_fun_t(
-    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *out);
 
 typedef void tbm_mult_fun_t(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *in2, uint32_t n_col8_2, uint64_t *out);
-    
+
 tbm_transpose_fun_t tbm_transpose_u64;
 tbm_mult_fun_t tbm_mult_u64;
 tbm_mult_fun_t tbm_mult_t_u64;
+
+#if defined(__aarch64__)
+tbm_transpose_fun_t tbm_transpose_simd;
+tbm_mult_fun_t tbm_mult_simd;
+tbm_mult_fun_t tbm_mult_t_simd;
+#else
+#if !defined(__SUFFIX)
+#define tbm_transpose_simd NULL
+#define tbm_mult_simd NULL
+#define tbm_mult_t_simd NULL
+#endif
+#endif
 
 #endif

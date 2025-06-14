@@ -16,11 +16,24 @@ import tinybinmat as tbm
 import numpy as np
 import sys
 
-from time import time
+from platform import machine
 from termcolor import colored
+from time import time
 
-method_list = ["default", "avx2", "gfni"]
+is_aarch64 = machine() in ["aarch64"]
+if is_aarch64:
+    method_list = ["default", "simd"]
+else:
+    method_list = ["default", "avx2", "gfni"]
 # method_list = ["avx2", "gfni"]
+
+
+def print_method_list():
+    test_str = "algo"
+    print_list = ["%20s" % test_str]
+    for method in method_list:
+        print_list.append("%15s" % method)
+    print(" ".join(print_list))
 
 
 def test_ok(ok_list, test_str):
@@ -158,6 +171,7 @@ if __name__ == "__main__":
     mats = mats.view("S%d" % n_bit).reshape(mats.shape[:-1])
     print(mats)
 
+    print_method_list()
     for n_bit in [8, 10, 16, 20, 32]:
         mat = np.random.randint(2, size=(n_run, n_bit, n_bit), dtype=np.uint8)
 

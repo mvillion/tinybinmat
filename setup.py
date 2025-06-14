@@ -39,6 +39,9 @@ if is_aarch64:
     cflag = cflag+["-march=armv8-a+simd"]
     for lib_name in ["tinybinmat"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
+    cflag = cflag+["-DUSE_SIMD"]
+    for lib_name in ["tinybinmat_simd"]:
+        lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 else:
     cflag = cflag+["-mavx2"]
     for lib_name in ["tinybinmat", "tinybinmat_avx2"]:

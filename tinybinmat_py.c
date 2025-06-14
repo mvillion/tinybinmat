@@ -2,9 +2,17 @@
 #include "tinybinmat_avx2.h"
 #include "tinybinmat_utils.h"
 
+#if defined(__aarch64__)
+#include <sys/auxv.h>
+#include <asm/hwcap.h>
+#endif
 
+#define N_METHOD 4
 uint8_t parse_method_str(const char *method_str)
 {
+#if defined(__aarch64__)
+    long hwcaps = getauxval(AT_HWCAP);
+#endif
     uint8_t i_fun = 0xff;
     if ((method_str == NULL) || (strcmp(method_str, "default") == 0))
     {
@@ -22,15 +30,21 @@ uint8_t parse_method_str(const char *method_str)
         i_fun = __builtin_cpu_supports("gfni") ? 2 : 0xff;
 #endif
     }
+    else if (strcmp(method_str, "simd") == 0)
+    {
+#if defined(__aarch64__)
+        i_fun = (hwcaps & HWCAP_AES) ? 3 : 0xff;
+#endif
+    }
     else
         PyErr_Format(
             PyExc_RuntimeError,
-            "method string shall be 'avx2', 'gfni', or 'default'");
+            "method string shall be 'avx2', 'gfni', 'simd' or 'default'");
     if (i_fun == 0xff)
         PyErr_Format(
             PyExc_RuntimeError,
             "%s instruction set is not supported by the CPU", method_str);
-    return i_fun;    
+    return i_fun;
 }
 
 //______________________________________________________________________________
@@ -87,7 +101,7 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
 
     uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
     tbm_encode_gfnio(
-        in, n_mat, n_row, n_col, 
+        in, n_mat, n_row, n_col,
         (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out));
 
     // decrease the reference count
@@ -104,7 +118,7 @@ static PyObject* tbm_mult_template(
 
     static char *kwlist[] = {"in", "in2", "method", NULL};
     int ok = PyArg_ParseTupleAndKeywords(
-        arg, kwarg, "O!O!|s", kwlist, &PyArray_Type, &arr_in, 
+        arg, kwarg, "O!O!|s", kwlist, &PyArray_Type, &arr_in,
         &PyArray_Type, &arr_in2, &method_str);
     if (!ok)
         return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
@@ -113,7 +127,7 @@ static PyObject* tbm_mult_template(
     uint8_t i_fun = parse_method_str(method_str);
     if (i_fun == 0xff)
         return NULL;
-    i_fun += is_transposed ? 3 : 0;
+    i_fun += is_transposed ? N_METHOD : 0;
 
     // create output dimensions
     int n_dim = PyArray_NDIM(arr_in);
@@ -174,9 +188,9 @@ static PyObject* tbm_mult_template(
         uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
         uint64_t *in2 = (uint64_t *)PyArray_DATA(arr_in2);
         uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_mult_fun_t *fun[6] = {
-            tbm_mult_u64, tbm_mult_avx2, tbm_mult_gfni, 
-            tbm_mult_t_u64, tbm_mult_t_avx2, tbm_mult_t_gfni};
+        tbm_mult_fun_t *fun[N_METHOD*2] = {
+            tbm_mult_u64, tbm_mult_avx2, tbm_mult_gfni, tbm_mult_simd,
+            tbm_mult_t_u64, tbm_mult_t_avx2, tbm_mult_t_gfni, tbm_mult_t_simd};
         if (is_transposed)
             fun[i_fun](in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
         else
@@ -211,7 +225,7 @@ static PyObject* tbm_sprint(PyObject *self, PyObject *arg, PyObject *kwarg)
 
     static char *kwlist[] = {"in", "n_row", "n_col", "str01", "fmt", NULL};
     int ok = PyArg_ParseTupleAndKeywords(
-        arg, kwarg, "O!IIO!|s", kwlist, &PyArray_Type, &arr_in, &n_row, &n_col, 
+        arg, kwarg, "O!IIO!|s", kwlist, &PyArray_Type, &arr_in, &n_row, &n_col,
         &PyArray_Type, &arr_str01, &format_str);
     if (!ok)
         return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
@@ -289,7 +303,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
 
     static char *kwlist[] = {"in", "method", NULL};
     int ok = PyArg_ParseTupleAndKeywords(
-        arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in, 
+        arg, kwarg, "O!|s", kwlist, &PyArray_Type, &arr_in,
         &method_str);
     if (!ok)
         return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
@@ -329,8 +343,10 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
     {
         uint64_t *in = (uint64_t *)PyArray_DATA(arr_in);
         uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
-        tbm_transpose_fun_t *fun[3] = {
-            tbm_transpose_u64, tbm_transpose_avx2, tbm_transpose_gfni};
+        tbm_transpose_fun_t *fun[N_METHOD] = {
+            tbm_transpose_u64, tbm_transpose_avx2, tbm_transpose_gfni,
+            tbm_transpose_simd
+        };
         fun[i_fun](in, n_mat, n_row8, n_col8, out);
     }
     else
@@ -349,7 +365,7 @@ static PyMethodDef method_def[] = {
         "encode a square matrix into a tinybinmat"
     },
     {
-        "mult", (PyCFunction)tbm_mult, METH_VARARGS | METH_KEYWORDS, 
+        "mult", (PyCFunction)tbm_mult, METH_VARARGS | METH_KEYWORDS,
         "multiply twp tinybinmat matrices"
     },
     {
@@ -357,11 +373,11 @@ static PyMethodDef method_def[] = {
         "multiply a tinybinmat by another transposed tinybinmat"
     },
     {
-        "sprint", (PyCFunction)tbm_sprint, METH_VARARGS | METH_KEYWORDS, 
+        "sprint", (PyCFunction)tbm_sprint, METH_VARARGS | METH_KEYWORDS,
         "convert to uint8 array"
     },
     {
-        "transpose", (PyCFunction)tbm_transpose, METH_VARARGS | METH_KEYWORDS, 
+        "transpose", (PyCFunction)tbm_transpose, METH_VARARGS | METH_KEYWORDS,
         "transpose tinybinmat"
     },
     {NULL, NULL, 0, NULL}

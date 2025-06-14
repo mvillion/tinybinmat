@@ -2,7 +2,6 @@
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
-//#define USE_GFNI
 #if defined(USE_GFNI)
 #define __SUFFIX(fun) fun##_gfni
 #else
