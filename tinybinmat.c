@@ -8,7 +8,14 @@
 #include "tinybinmat.h"
 #include "tinybinmat_template.c"
 
-#if !defined(USE_SIMD)
+#if defined(USE_SIMD)
+void print_simd_uint64(uint64x2_t reg)
+{
+    uint64_t *ptr = (uint64_t *)&reg;
+    printf("%016lx ", ptr[1]);
+    printf("%016lx\n", ptr[0]);
+}
+#else
 void tbm_encode_gfnio(
     uint8_t *in, uint64_t n_mat, uint32_t n_row, uint32_t n_col, uint64_t *out)
 {
@@ -227,14 +234,40 @@ uint64_t inline tbm_mult8x8_u64rev(uint64_t a, uint64_t b)
         uint64_t prod = bit_a & (0x0101010101010101*b8[i_bit]);
         out ^= prod;
     }
+    // printf("out  : %016lx\n", out);
+    return out;
+}
+
+static uint8x16_t inline tbm_mult8x8_simd(uint8x16_t a, uint8x16_t b)
+{
+    uint8x16_t repeat8x2 = vdupq_n_u8(0);
+    repeat8x2 = vreinterpretq_u8_u64(vsetq_lane_u64(
+        0x0808080808080808ull, vreinterpretq_u64_u8(repeat8x2), 1));
+    uint8x16_t out = vdupq_n_u8(0);
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        // create bit mask from the most significant bits in a octets
+        uint8x16_t bit_a = vreinterpretq_u8_s8(
+            vshrq_n_s8(vreinterpretq_s8_u8(a), 7));
+        a = vshlq_n_u8(a, 1);
+        // repeat 8 times least significant octet of b 8x8 matrices
+        uint8x16_t b_repeat = vqtbl1q_u8(b, repeat8x2);
+        b = vreinterpretq_u8_u64(vshrq_n_u64(vreinterpretq_u64_u8(b), 8));
+        uint8x16_t prod = vandq_u8(bit_a, b_repeat);
+        out = veorq_u8(out, prod);
+    }
+    // printf("out  : "); print_simd_uint64(vreinterpretq_u64_u8(out));
     return out;
 }
 
 
 static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])
 {
-    for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
-        out[i_prod] = tbm_mult8x8_u64rev(a, b[i_prod]);
+    uint8x16_t a_x2 = vreinterpretq_u8_u64(vdupq_n_u64(a));
+    uint8x16_t b_x2 = vld1q_u8((uint8_t *)b);
+    vst1q_u8((uint8_t *)out, tbm_mult8x8_simd(a_x2, b_x2));
+    b_x2 = vld1q_u8((uint8_t *)(b+2));
+    vst1q_u8((uint8_t *)(out+2), tbm_mult8x8_simd(a_x2, b_x2));
 }
 #else
 static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])

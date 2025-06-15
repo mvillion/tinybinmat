@@ -15,7 +15,7 @@ void print_avx2_uint64(__m256i reg)
     printf("%016lx\n", ptr[0]);
 }
 
-__m256i _mm256_movm_epi8_avx2(const uint32_t mask) 
+__m256i _mm256_movm_epi8_avx2(const uint32_t mask)
 {
     __m256i vmask = _mm256_set1_epi32(mask);
     const __m256i shuffle = _mm256_set_epi64x(
@@ -101,7 +101,7 @@ static __attribute__ ((noinline)) void tbm_transpose_2x2(
         __m256i a3210r = tbm_transpose8x8_m256i(in8x8_4);
         __m256i a3120r = _mm256_permute4x64_epi64(
             a3210r, _MM_SHUFFLE(3, 1, 2, 0));
-    
+
         // store transposed 4x8x8 blocks
         _mm256_storeu_si256(out+i_mat, a3120r);
     }
@@ -116,12 +116,12 @@ static __attribute__ ((noinline)) void tbm_transpose_4x4(
         __m256i in7654 = _mm256_loadu_si256(in+i_mat*4+1);
         __m256i inba98 = _mm256_loadu_si256(in+i_mat*4+2);
         __m256i infedc = _mm256_loadu_si256(in+i_mat*4+3);
-    
+
         __m256i in9810 = _mm256_permute2x128_si256(in3210, inba98, 0x20);
         __m256i indc54 = _mm256_permute2x128_si256(in7654, infedc, 0x20);
         __m256i inba32 = _mm256_permute2x128_si256(in3210, inba98, 0x31);
         __m256i infe76 = _mm256_permute2x128_si256(in7654, infedc, 0x31);
-    
+
         __m256i inc840 = _mm256_unpacklo_epi64(in9810, indc54);
         __m256i ind951 = _mm256_unpackhi_epi64(in9810, indc54);
         __m256i inea62 = _mm256_unpacklo_epi64(inba32, infe76);
@@ -137,7 +137,7 @@ static __attribute__ ((noinline)) void tbm_transpose_4x4(
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 static void __attribute__ ((noinline)) tbm_transpose_256(
-    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *out)
 {
     tbm_transpose_256_template(
@@ -147,7 +147,7 @@ static void __attribute__ ((noinline)) tbm_transpose_256(
 #pragma GCC pop_options //-----------------------------------------------------
 
 void __SUFFIX(tbm_transpose) (
-    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *out)
 {
     if (n_row8 == 1 || n_col8 == 1)
@@ -181,7 +181,7 @@ static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
     __m128i repeat8x2 = _mm_set_epi8(
         8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0);
     __m256i repeat8x4 = _mm256_set_m128i(repeat8x2, repeat8x2);
-    
+
     __m256i out = _mm256_setzero_si256();
     __m256i test_bit = _mm256_set1_epi8(128);
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
@@ -190,7 +190,7 @@ static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
         __m256i bit_a = _mm256_and_si256(a, test_bit);
         bit_a = _mm256_cmpeq_epi8(bit_a, test_bit);
         a = _mm256_slli_epi64(a, 1);
-        // repeat 8 times leat significant octet of b 8x8 matrices
+        // repeat 8 times least significant octet of b 8x8 matrices
         __m256i b_repeat = _mm256_shuffle_epi8(b, repeat8x4);
         b = _mm256_srli_epi64(b, 8);
         __m256i prod = _mm256_and_si256(bit_a, b_repeat);
@@ -205,7 +205,7 @@ static void inline tbm_mult8x8_1x4(
 {
     __m256i _a = _mm256_set1_epi64x(a);
     __m256i _b = _mm256_loadu_si256((__m256i *)b);
-    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i(_a, _b)); 
+    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i(_a, _b));
 }
 
 static void inline tbm_mult8x8_x4(
@@ -213,7 +213,7 @@ static void inline tbm_mult8x8_x4(
 {
     __m256i _a = _mm256_loadu_si256((__m256i *)a);
     __m256i _b = _mm256_loadu_si256((__m256i *)b);
-    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i(_a, _b)); 
+    _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i(_a, _b));
 }
 
 static __m256i inline tbm_mult16x16_m256i(__m256i a3210, __m256i b3210)
@@ -235,7 +235,7 @@ static void inline tbm_mult32x32_m256i(__m256i a[4], __m256i b[4])
     uint64_t *a64 = (uint64_t *)a;
     for (uint8_t i_row = 0; i_row < 4; i_row++)
     {
-        __m256i repeat; //<! current value of a cell 4 times  
+        __m256i repeat; //<! current value of a cell 4 times
         __m256i out; //<! accumulated sum of the products
         out = _mm256_setzero_si256();
         repeat = _mm256_set1_epi64x(*a64++);
@@ -283,7 +283,7 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_1(
     __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
     mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_mat-i8x8), mask);
     _mm256_maskstore_epi64(
-        (long long int *)(out+i8x8), mask, 
+        (long long int *)(out+i8x8), mask,
         tbm_mult8x8_m256i(in8x8_4, in2_8x8_4));
 }
 
@@ -349,7 +349,7 @@ void __SUFFIX(tbm_mult) (
         return tbm_mult_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_col8_2 == 4))
         return tbm_mult_ncol8_4(in, n_mat, in2, out);
-    
+
     tbm_mult_256(in, n_mat, n_row8, n_col8, in2, n_col8_2, out);
 }
 
@@ -377,7 +377,7 @@ uint64_t inline tbm_mult_t8x8_dot_avx2(uint64_t a8x8, uint64_t tb8x8)
     prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 2));
     prod_4 = _mm256_xor_si256(prod_4, _mm256_slli_epi16(prod_4, 1));
     uint64_t out = (uint32_t)_mm256_movemask_epi8(prod_4);
-    
+
     row_a_4 = _mm256_cvtepu8_epi64(_mm_set_epi64x(0, a8x8));
     repeat_4 = _mm256_shuffle_epi8(row_a_4, repeat8x4);
     prod_4 = _mm256_and_si256(tb8x8_4, repeat_4);
@@ -463,7 +463,7 @@ static void inline tbm_mult_t32x32_m256i(__m256i a[4], __m256i b[4])
     {
         // __m256i a3210 = a[i_row];
 
-        __m256i repeat; //<! current product of a cell 4 times  
+        __m256i repeat; //<! current product of a cell 4 times
         __m256i prod; //<! current product of a cell and b row
         __m256i out; //<! accumulated sum of the products
         out = _mm256_setzero_si256();
@@ -524,7 +524,7 @@ static void __attribute__ ((noinline)) tbm_mult_t_ncol8_1(
     __m256i mask = _mm256_set_epi64x(3, 2, 1, 0); //!< mask for the last block
     mask = _mm256_cmpgt_epi64(_mm256_set1_epi64x(n_mat-i8x8), mask);
     _mm256_maskstore_epi64(
-        (long long int *)(out+i8x8), mask, 
+        (long long int *)(out+i8x8), mask,
         tbm_mult_t8x8_m256i(in8x8_4, in2_8x8_4));
 #endif
 }
@@ -585,6 +585,6 @@ void __SUFFIX(tbm_mult_t) (
         return tbm_mult_t_ncol8_2(in, n_mat, in2, out);
     if ((n_col8 == 4) && (n_row8 == 4) && (n_row8_2 == 4))
         return tbm_mult_t_ncol8_4(in, n_mat, in2, out);
-    
+
     tbm_mult_t_dot(in, n_mat, n_row8, n_col8, in2, n_row8_2, out);
 }

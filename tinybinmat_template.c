@@ -5,7 +5,7 @@ typedef void tbm_mult8x8_x4_fun_t(
 typedef uint64_t tbm_dot_fun_t(uint64_t *in, uint64_t *in2, uint32_t n_col8);
 
 static void inline tbm_transpose_256_template(
-    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8, 
+    uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
     uint64_t *out, tbm_transpose8x8_x4_fun_t *transpose_x4_fun)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -31,7 +31,7 @@ static void inline tbm_transpose_256_template(
 }
 
 static void inline tbm_mult32x32_template(
-    uint64_t a[16], uint64_t b[16], uint64_t out[16], 
+    uint64_t a[16], uint64_t b[16], uint64_t out[16],
     tbm_mult8x8_1x4_fun_t *mult1x4_fun)
 {
     uint64_t *a64 = a;
@@ -54,7 +54,7 @@ static void inline tbm_mult32x32_template(
 
 static void inline tbm_mult_256_template(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
-    uint64_t *in2, uint32_t n_col8_2, uint64_t *out, 
+    uint64_t *in2, uint32_t n_col8_2, uint64_t *out,
     tbm_mult8x8_1x4_fun_t *mult1x4_fun)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
@@ -73,7 +73,7 @@ static void inline tbm_mult_256_template(
                 {
                     uint64_t prod[4];
                     mult1x4_fun(
-                        in_mat[i_row*n_col8+i_dot], 
+                        in_mat[i_row*n_col8+i_dot],
                         in2_mat+i_dot*n_col8_2+i_col, prod);
                     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
                         acc[i_prod] ^= prod[i_prod];
@@ -88,7 +88,7 @@ static void inline tbm_mult_256_template(
             {
                 uint64_t prod[4];
                 mult1x4_fun(
-                    in_mat[i_row*n_col8+i_dot], 
+                    in_mat[i_row*n_col8+i_dot],
                     in2_mat+i_dot*n_col8_2+i_col, prod);
                 for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
                     acc[i_prod] ^= prod[i_prod];
