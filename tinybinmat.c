@@ -116,7 +116,6 @@ uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
     return in8x8;
 }
 
-//#define USE_SIMD
 #if defined(USE_SIMD)
 static void inline tbm_transpose8x8_simd(uint64_t in[2])
 {
@@ -212,15 +211,46 @@ uint64_t inline tbm_mult8x8_u64(uint64_t a, uint64_t b)
     return out;
 }
 
-static void inline tbm_mult8x8_1x4(
-    uint64_t a, uint64_t b[4], uint64_t out[4])
+//#define USE_SIMD
+#if defined(USE_SIMD)
+uint64_t inline tbm_mult8x8_u64rev(uint64_t a, uint64_t b)
+{
+    uint64_t out = 0;
+    uint8_t *b8 = (uint8_t *)&b;
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        // create bit mask from the least significant bits in a
+        uint64_t bit_a = a & 0x8080808080808080;
+        bit_a >>= 7;
+        bit_a *= 0xff;
+        a <<= 1;
+        uint64_t prod = bit_a & (0x0101010101010101*b8[i_bit]);
+        out ^= prod;
+    }
+    return out;
+}
+
+
+static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])
+{
+    for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
+        out[i_prod] = tbm_mult8x8_u64rev(a, b[i_prod]);
+}
+#else
+static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         out[i_prod] = tbm_mult8x8_u64(a, b[i_prod]);
 }
+#endif
 
-static void inline tbm_mult8x8_x4(
-    uint64_t a[4], uint64_t b[4], uint64_t out[4])
+void __SUFFIX(tbm_mult8x8_1x4)(
+    uint64_t a, uint64_t b[4], uint64_t out[4])
+{
+    tbm_mult8x8_1x4(a, b, out);
+}
+
+static void inline tbm_mult8x8_x4(uint64_t a[4], uint64_t b[4], uint64_t out[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         out[i_prod] = tbm_mult8x8_u64(a[i_prod], b[i_prod]);
