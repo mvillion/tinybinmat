@@ -33,7 +33,7 @@ uint8_t parse_method_str(const char *method_str)
     else if (strcmp(method_str, "simd") == 0)
     {
 #if defined(__aarch64__)
-        i_fun = (hwcaps & HWCAP_AES) ? 3 : 0xff;
+        i_fun = (hwcaps & HWCAP_ASIMD) ? 3 : 0xff;
 #endif
     }
     else

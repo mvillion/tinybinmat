@@ -22,7 +22,7 @@ def src_from_name(name, cflag=None):
     if cflag is not None:
         if type(cflag) is not list:
             cflag = [cflag]
-        out["cflags"] = cflag
+        out["cflags"] = cflag.copy()
     return out
 
 is_aarch64 = machine() in ["aarch64"]
@@ -32,22 +32,22 @@ if force_aarch64:
     os.environ["CC"] = "arm-none-eabi-gcc"
 
 cflag = ["-O3"]
+cflag += ["-fdump-tree-vect", "-ftree-vectorizer-verbose=1"]
 extra_cflag = []
 lib_list = []
 
 if is_aarch64:
-    cflag = cflag+["-march=armv8-a+simd"]
     for lib_name in ["tinybinmat"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
-    cflag = cflag+["-DUSE_SIMD"]
+    cflag += ["-march=armv8-a+simd", "-DUSE_SIMD"]
     for lib_name in ["tinybinmat_simd"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 else:
-    cflag = cflag+["-mavx2"]
+    cflag += ["-mavx2"]
     for lib_name in ["tinybinmat", "tinybinmat_avx2"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 
-    cflag = cflag+["-mgfni", "-DUSE_GFNI"]
+    cflag += ["-mgfni", "-DUSE_GFNI"]
     for lib_name in ["tinybinmat_gfni"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
     # cflag = ["-O3", "-mavx2", "-mgfni", "-DUSE_GFNI"]

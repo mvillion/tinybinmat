@@ -1,4 +1,5 @@
 #if defined(USE_SIMD)
+#include "arm_neon.h"
 #define __SUFFIX(fun) fun##_simd
 #else
 #define __SUFFIX(fun) fun##_u64
@@ -117,16 +118,34 @@ uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
 
 //#define USE_SIMD
 #if defined(USE_SIMD)
-static void inline tbm_transpose8x8_x2(uint64_t in[2])
+static void inline tbm_transpose8x8_simd(uint64_t in[2])
 {
-    for (uint8_t i_prod = 0; i_prod < 2; i_prod++)
-        in[i_prod] = tbm_transpose8x8_u64(in[i_prod]);
+    uint64x2_t in8x8 = vld1q_u64(in);
+    uint64x2_t ur_mask4x4 = vdupq_n_u64(0xf0f0f0f000000000);
+    uint64x2_t xor = veorq_u64(in8x8, vshlq_n_u64(in8x8, 36));
+    xor = vandq_u64(xor, ur_mask4x4);
+    in8x8 = veorq_u64(in8x8, xor);
+    xor = vshrq_n_u64(xor, 36);
+    in8x8 = veorq_u64(in8x8, xor);
+    uint64x2_t ur_mask2x2 = vdupq_n_u64(0xcccc0000cccc0000);
+    xor = veorq_u64(in8x8, vshlq_n_u64(in8x8, 18));
+    xor = vandq_u64(xor, ur_mask2x2);
+    in8x8 = veorq_u64(in8x8, xor);
+    xor = vshrq_n_u64(xor, 18);
+    in8x8 = veorq_u64(in8x8, xor);
+    uint64x2_t ur_mask1x1 = vdupq_n_u64(0xaa00aa00aa00aa00);
+    xor = veorq_u64(in8x8, vshlq_n_u64(in8x8, 9));
+    xor = vandq_u64(xor, ur_mask1x1);
+    in8x8 = veorq_u64(in8x8, xor);
+    xor = vshrq_n_u64(xor, 9);
+    in8x8 = veorq_u64(in8x8, xor);
+    vst1q_u64(in, in8x8);
 }
 
 static void inline tbm_transpose8x8_x4(uint64_t in[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod += 2)
-        tbm_transpose8x8_x2(in+i_prod);
+        tbm_transpose8x8_simd(in+i_prod);
 }
 #else
 static void inline tbm_transpose8x8_x4(uint64_t in[4])
