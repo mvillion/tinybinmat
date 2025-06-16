@@ -153,8 +153,7 @@ void __SUFFIX(tbm_transpose) (
     if (n_row8 == 1 || n_col8 == 1)
     {
         // no block transpose needed
-        uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
-        return tbm_transpose_1d(in, n8x8, out);
+        return tbm_transpose_1d(in, n_mat, out);
     }
     else if (n_row8 == 2 && n_col8 == 2)
     {

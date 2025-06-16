@@ -182,6 +182,51 @@ static __attribute__ ((noinline)) void tbm_transpose_1d(
         out[i8x8] = tmp[i8x8];
 }
 
+static __attribute__ ((noinline)) void tbm_transpose_2x2(
+    uint64_t *in, uint64_t n8x8, uint64_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n8x8; i_mat++)
+    {
+        out[0] = in[0];
+        out[1] = in[2];
+        out[2] = in[1];
+        out[3] = in[3];
+        tbm_transpose8x8_x4(out);
+        in += 4;
+        out += 4;
+    }
+}
+
+static __attribute__ ((noinline)) void tbm_transpose_4x4(
+    uint64_t *in, uint64_t n8x8, uint64_t *out)
+{
+    for (uint64_t i_mat = 0; i_mat < n8x8; i_mat++)
+    {
+        out[ 0] = in[ 0+0];
+        out[ 1] = in[ 4+0];
+        out[ 2] = in[ 8+0];
+        out[ 3] = in[12+0];
+        tbm_transpose8x8_x4(out);
+        out[ 4] = in[ 0+1];
+        out[ 5] = in[ 4+1];
+        out[ 6] = in[ 8+1];
+        out[ 7] = in[12+1];
+        tbm_transpose8x8_x4(out+4);
+        out[ 8] = in[ 0+2];
+        out[ 9] = in[ 4+2];
+        out[10] = in[ 8+2];
+        out[11] = in[12+2];
+        tbm_transpose8x8_x4(out+8);
+        out[12] = in[ 0+3];
+        out[13] = in[ 4+3];
+        out[14] = in[ 8+3];
+        out[15] = in[12+3];
+        tbm_transpose8x8_x4(out+12);
+        in += 16;
+        out += 16;
+    }
+}
+
 #pragma GCC push_options //----------------------------------------------------
 #pragma GCC optimize("no-tree-vectorize")
 static void __attribute__ ((noinline)) tbm_transpose_256(
@@ -199,17 +244,16 @@ void __SUFFIX(tbm_transpose) (
     if (n_row8 == 1 || n_col8 == 1)
     {
         // no block transpose needed
-        uint64_t n8x8 = n_mat*n_row8*n_col8; //!< number of 8x8 blocks
-        return tbm_transpose_1d(in, n8x8, out);
+        return tbm_transpose_1d(in, n_mat, out);
     }
-    // else if (n_row8 == 2 && n_col8 == 2)
-    // {
-    //     return tbm_transpose_2x2((__m256i *)in, n_mat, (__m256i *)out);
-    // }
-    // else if (n_row8 == 4 && n_col8 == 4)
-    // {
-    //     return tbm_transpose_4x4((__m256i *)in, n_mat, (__m256i *)out);
-    // }
+    else if (n_row8 == 2 && n_col8 == 2)
+    {
+        return tbm_transpose_2x2(in, n_mat, out);
+    }
+    else if (n_row8 == 4 && n_col8 == 4)
+    {
+        return tbm_transpose_4x4(in, n_mat, out);
+    }
     tbm_transpose_256(in, n_mat, n_row8, n_col8, out);
 }
 #pragma GCC pop_options //-----------------------------------------------------
