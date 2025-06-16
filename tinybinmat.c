@@ -1,14 +1,11 @@
+#include "tinybinmat.h"
+#include "tinybinmat_template.c"
+#include <stdio.h>
+
 #if defined(USE_SIMD)
 #include "arm_neon.h"
 #define __SUFFIX(fun) fun##_simd
-#else
-#define __SUFFIX(fun) fun##_u64
-#endif
 
-#include "tinybinmat.h"
-#include "tinybinmat_template.c"
-
-#if defined(USE_SIMD)
 void print_simd_uint64(uint64x2_t reg)
 {
     uint64_t *ptr = (uint64_t *)&reg;
@@ -16,6 +13,8 @@ void print_simd_uint64(uint64x2_t reg)
     printf("%016lx\n", ptr[0]);
 }
 #else
+#define __SUFFIX(fun) fun##_u64
+
 void tbm_encode_gfnio(
     uint8_t *in, uint64_t n_mat, uint32_t n_row, uint32_t n_col, uint64_t *out)
 {
@@ -260,7 +259,6 @@ static uint8x16_t inline tbm_mult8x8_simd(uint8x16_t a, uint8x16_t b)
     return out;
 }
 
-
 static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])
 {
     uint8x16_t a_x2 = vreinterpretq_u8_u64(vdupq_n_u64(a));
@@ -269,18 +267,40 @@ static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])
     b_x2 = vld1q_u8((uint8_t *)(b+2));
     vst1q_u8((uint8_t *)(out+2), tbm_mult8x8_simd(a_x2, b_x2));
 }
+
+static void inline tbm_mult8x8_x4(uint64_t a[4], uint64_t b[4], uint64_t out[4])
+{
+    uint8x16_t a_x2 = vld1q_u8((uint8_t *)a);
+    uint8x16_t b_x2 = vld1q_u8((uint8_t *)b);
+    vst1q_u8((uint8_t *)out, tbm_mult8x8_simd(a_x2, b_x2));
+    a_x2 = vld1q_u8((uint8_t *)(a+2));
+    b_x2 = vld1q_u8((uint8_t *)(b+2));
+    vst1q_u8((uint8_t *)(out+2), tbm_mult8x8_simd(a_x2, b_x2));
+}
+
+static void inline tbm_mult16x16_simd(
+    uint64_t a[4], uint64_t b[4], uint64_t out[4])
+{
+    // a is:    b is:
+    // [0, 1]   [0, 1]   [0, 0]   [0, 1]   [1, 1]   [2, 3]
+    // [2, 3] @ [2, 3] = [2, 2] * [0, 1] + [3, 3] * [2, 3]
+    uint8x16_t b_01 = vld1q_u8((uint8_t *)b);
+    uint8x16_t b_23 = vld1q_u8((uint8_t *)(b+2));
+    uint8x16_t acc;
+    acc = tbm_mult8x8_simd(vreinterpretq_u8_u64(vdupq_n_u64(a[0])), b_01);
+    acc = veorq_u8(acc, tbm_mult8x8_simd(
+        vreinterpretq_u8_u64(vdupq_n_u64(a[1])), b_23));
+    vst1q_u8((uint8_t *)out, acc);
+    acc = tbm_mult8x8_simd(vreinterpretq_u8_u64(vdupq_n_u64(a[2])), b_01);
+    acc = veorq_u8(acc, tbm_mult8x8_simd(
+        vreinterpretq_u8_u64(vdupq_n_u64(a[3])), b_23));
+    vst1q_u8((uint8_t *)(out+2), acc);
+}
 #else
 static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         out[i_prod] = tbm_mult8x8_u64(a, b[i_prod]);
-}
-#endif
-
-void __SUFFIX(tbm_mult8x8_1x4)(
-    uint64_t a, uint64_t b[4], uint64_t out[4])
-{
-    tbm_mult8x8_1x4(a, b, out);
 }
 
 static void inline tbm_mult8x8_x4(uint64_t a[4], uint64_t b[4], uint64_t out[4])
@@ -288,6 +308,7 @@ static void inline tbm_mult8x8_x4(uint64_t a[4], uint64_t b[4], uint64_t out[4])
     for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
         out[i_prod] = tbm_mult8x8_u64(a[i_prod], b[i_prod]);
 }
+#endif
 
 static void __attribute__ ((noinline)) tbm_mult_256(
     uint64_t *in, uint64_t n_mat, uint32_t n_row8, uint32_t n_col8,
@@ -309,6 +330,9 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
+#if defined(USE_SIMD)
+        tbm_mult16x16_simd(in, in2, out);
+#else
         out[0] = tbm_mult8x8_u64(in[0], in2[0]);
         out[0] ^= tbm_mult8x8_u64(in[1], in2[2]);
         out[1] = tbm_mult8x8_u64(in[0], in2[1]);
@@ -317,6 +341,7 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
         out[2] ^= tbm_mult8x8_u64(in[3], in2[2]);
         out[3] = tbm_mult8x8_u64(in[2], in2[1]);
         out[3] ^= tbm_mult8x8_u64(in[3], in2[3]);
+#endif
         in += 4;
         in2 += 4;
         out += 4;

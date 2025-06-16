@@ -200,16 +200,14 @@ static __m256i inline tbm_mult8x8_m256i(__m256i a, __m256i b)
 }
 #endif
 
-static void inline tbm_mult8x8_1x4(
-    uint64_t a, uint64_t b[4], uint64_t out[4])
+static void inline tbm_mult8x8_1x4(uint64_t a, uint64_t b[4], uint64_t out[4])
 {
     __m256i _a = _mm256_set1_epi64x(a);
     __m256i _b = _mm256_loadu_si256((__m256i *)b);
     _mm256_storeu_si256((__m256i *)out, tbm_mult8x8_m256i(_a, _b));
 }
 
-static void inline tbm_mult8x8_x4(
-    uint64_t a[4], uint64_t b[4], uint64_t out[4])
+static void inline tbm_mult8x8_x4(uint64_t a[4], uint64_t b[4], uint64_t out[4])
 {
     __m256i _a = _mm256_loadu_si256((__m256i *)a);
     __m256i _b = _mm256_loadu_si256((__m256i *)b);
