@@ -163,8 +163,23 @@ static void inline tbm_transpose8x8_x4(uint64_t in[4])
 static __attribute__ ((noinline)) void tbm_transpose_1d(
     uint64_t *in, uint64_t n8x8, uint64_t *out)
 {
-    for (uint64_t i8x8 = 0; i8x8 < n8x8; i8x8++)
-        out[i8x8] = tbm_transpose8x8_u64(in[i8x8]);
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
+    {
+        for (uint8_t i_copy = 0; i_copy < 4; i_copy++)
+            out[i_copy] = in[i_copy];
+        tbm_transpose8x8_x4(out);
+        in += 4;
+        out += 4;
+    }
+    if (i8x8 == n8x8)
+        return; // all blocks are processed
+    uint64_t tmp[4];
+        for (uint8_t i_copy = 0; i_copy < 4; i_copy++)
+            tmp[i_copy] = in[i_copy];
+    tbm_transpose8x8_x4(tmp);
+    for (i8x8 = 0; i8x8 < (n8x8 & 3); i8x8++)
+        out[i8x8] = tmp[i8x8];
 }
 
 #pragma GCC push_options //----------------------------------------------------
