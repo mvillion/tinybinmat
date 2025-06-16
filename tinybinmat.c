@@ -233,7 +233,6 @@ uint64_t inline tbm_mult8x8_u64rev(uint64_t a, uint64_t b)
         uint64_t prod = bit_a & (0x0101010101010101*b8[i_bit]);
         out ^= prod;
     }
-    // printf("out  : %016lx\n", out);
     return out;
 }
 
@@ -255,7 +254,6 @@ static uint8x16_t inline tbm_mult8x8_simd(uint8x16_t a, uint8x16_t b)
         uint8x16_t prod = vandq_u8(bit_a, b_repeat);
         out = veorq_u8(out, prod);
     }
-    // printf("out  : "); print_simd_uint64(vreinterpretq_u64_u8(out));
     return out;
 }
 
@@ -321,8 +319,20 @@ static void __attribute__ ((noinline)) tbm_mult_256(
 static void __attribute__ ((noinline)) tbm_mult_ncol8_1(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
-    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
-        out[i_mat] = tbm_mult8x8_u64(in[i_mat], in2[i_mat]);
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    for (i8x8 = 0; i8x8 < n_mat/4*4; i8x8 += 4)
+    {
+        tbm_mult8x8_x4(in, in2, out);
+        in += 4;
+        in2 += 4;
+        out += 4;
+    }
+    if (i8x8 == n_mat)
+        return; // all blocks are processed
+    uint64_t tmp[4];
+    tbm_mult8x8_x4(in, in2, tmp);
+    for (i8x8 = 0; i8x8 < (n_mat & 3); i8x8++)
+        out[i8x8] = tmp[i8x8];
 }
 
 static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
