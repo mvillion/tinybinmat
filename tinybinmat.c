@@ -187,10 +187,16 @@ static __attribute__ ((noinline)) void tbm_transpose_2x2(
 {
     for (uint64_t i_mat = 0; i_mat < n8x8; i_mat++)
     {
+#if defined(USE_SIMD)
+        uint64x2x2_t out3_0 = vld2q_u64(in);
+        vst1q_u64(out, out3_0.val[0]);
+        vst1q_u64(out+2, out3_0.val[1]);
+#else
         out[0] = in[0];
         out[1] = in[2];
         out[2] = in[1];
         out[3] = in[3];
+#endif
         tbm_transpose8x8_x4(out);
         in += 4;
         out += 4;
