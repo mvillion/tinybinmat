@@ -202,25 +202,35 @@ static __attribute__ ((noinline)) void tbm_transpose_4x4(
 {
     for (uint64_t i_mat = 0; i_mat < n8x8; i_mat++)
     {
+#if defined(USE_SIMD)
+        uint64x2x4_t out7_0 = vld4q_u64(in);
+        uint64x2x4_t out15_8 = vld4q_u64(in+8);
+        for (uint8_t i_4 = 0; i_4 < 4; i_4++)
+        {
+            vst1q_u64(out+i_4*4, out7_0.val[i_4]);
+            vst1q_u64(out+i_4*4+2, out15_8.val[i_4]);
+        }
+#else
         out[ 0] = in[ 0+0];
         out[ 1] = in[ 4+0];
         out[ 2] = in[ 8+0];
         out[ 3] = in[12+0];
-        tbm_transpose8x8_x4(out);
         out[ 4] = in[ 0+1];
         out[ 5] = in[ 4+1];
         out[ 6] = in[ 8+1];
         out[ 7] = in[12+1];
-        tbm_transpose8x8_x4(out+4);
         out[ 8] = in[ 0+2];
         out[ 9] = in[ 4+2];
         out[10] = in[ 8+2];
         out[11] = in[12+2];
-        tbm_transpose8x8_x4(out+8);
         out[12] = in[ 0+3];
         out[13] = in[ 4+3];
         out[14] = in[ 8+3];
         out[15] = in[12+3];
+#endif
+        tbm_transpose8x8_x4(out);
+        tbm_transpose8x8_x4(out+4);
+        tbm_transpose8x8_x4(out+8);
         tbm_transpose8x8_x4(out+12);
         in += 16;
         out += 16;
