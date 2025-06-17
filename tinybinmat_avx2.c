@@ -299,12 +299,12 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_2(
     }
 }
 
-#if 1 // this code is faster than the one below
 static void __attribute__ ((noinline)) tbm_mult_ncol8_4(
     uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
+#if 1 // this code is faster than the one below
         __m256i in8x32[4];
         __m256i in2_8x32[4];
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
@@ -315,24 +315,14 @@ static void __attribute__ ((noinline)) tbm_mult_ncol8_4(
         tbm_mult32x32_m256i(in8x32, in2_8x32);
         for (uint8_t i_8row = 0; i_8row < 4; i_8row++)
             _mm256_storeu_si256(((__m256i *)out)+i_8row, in8x32[i_8row]);
-        in += 16;
-        in2 += 16;
-        out += 16;
-    }
-}
 #else
-static void __attribute__ ((noinline)) tbm_mult_ncol8_4(
-    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
-{
-    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
-    {
         tbm_mult32x32_template(in, in2, out, tbm_mult8x8_1x4);
+#endif
         in += 16;
         in2 += 16;
         out += 16;
     }
 }
-#endif
 
 #pragma GCC pop_options //------------------------------------------------------
 
