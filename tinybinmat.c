@@ -292,7 +292,6 @@ uint64_t inline tbm_mult8x8_u64(uint64_t a, uint64_t b)
     return out;
 }
 
-//#define USE_SIMD
 #if defined(USE_SIMD)
 uint64_t inline tbm_mult8x8_u64rev(uint64_t a, uint64_t b)
 {
@@ -461,23 +460,66 @@ void __SUFFIX(tbm_mult) (
 
 //______________________________________________________________________________
 // multiply two 8x8 bit matrices with the second matrix transposed
+//#define USE_SIMD
+#if defined(USE_SIMD)
 uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
 {
-    uint64_t out = 0;
+    uint8x8_t acc = vcreate_u8(0);
+    uint8x8_t _a8x8 = vcreate_u8(a8x8);
+    uint8x8_t _tb8x8 = vcreate_u8(tb8x8);
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        // uint8x8_t repeat = vdup_n_u8(tb[i_bit]);
+        uint8x8_t repeat = vdup_lane_u8(_tb8x8, i_bit);
+        uint8x8_t prod = vand_u8(_a8x8, repeat);
+        prod = vcnt_u8(prod);
+        prod = vand_u8(prod, vdup_n_u8(1));
+        // acc = vshl_n_u8(out, 1);
+        prod = vshl_n_u8(prod, 7-i_bit);
+        acc = vorr_u8(acc, prod);
+    }
+    return vdupd_lane_u64(vreinterpret_u64_u8(acc), 0);
+}
+
+void inline tbm_mult_t8x8_simd(
+    uint64_t a8x8[2], uint64_t tb8x8[2], uint64_t out[2])
+{
+    uint8x16_t acc_x2 = vdupq_n_u8(0);
+    uint8x16_t a8x8_x2 = vld1q_u8((uint8_t *)a8x8);
+    uint8x16_t tb8x8_x2 = vld1q_u8((uint8_t *)tb8x8);
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        uint8x16_t repeat = vcombine_u8(
+            vdup_lane_u8(vget_low_u8(tb8x8_x2), i_bit),
+            vdup_lane_u8(vget_high_u8(tb8x8_x2), i_bit));
+        uint8x16_t prod = vandq_u8(a8x8_x2, repeat);
+        prod = vcntq_u8(prod);
+        prod = vandq_u8(prod, vdupq_n_u8(1));
+        prod = vshlq_n_u8(prod, 7-i_bit);
+        acc_x2 = vorrq_u8(acc_x2, prod);
+    }
+    vst1q_u8((uint8_t *)out, acc_x2);
+}
+
+#else
+uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
+{
+    uint64_t acc = 0;
     uint8_t *tb = (uint8_t *)&tb8x8;
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
     {
-        uint64_t repeat = 0x0101010101010101*tb[7-i_bit];
+        uint64_t repeat = 0x0101010101010101*tb[i_bit];
         uint64_t prod = a8x8 & repeat;
-        prod ^= prod << 4;
-        prod ^= prod << 2;
-        prod ^= prod << 1;
-        prod &= 0x8080808080808080;
-        out >>= 1;
-        out |= prod;
+        prod ^= prod >> 4;
+        prod ^= prod >> 2;
+        prod ^= prod >> 1;
+        prod &= 0x0101010101010101;
+        acc <<= 1;
+        acc |= prod;
     }
-    return out;
+    return acc;
 }
+#endif
 
 uint64_t inline tbm_dot_t(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
 {
