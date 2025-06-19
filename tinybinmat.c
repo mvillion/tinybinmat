@@ -481,26 +481,56 @@ uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
     return vdupd_lane_u64(vreinterpret_u64_u8(acc), 0);
 }
 
-void inline tbm_mult_t8x8_simd(
-    uint64_t a8x8[2], uint64_t tb8x8[2], uint64_t out[2])
+#if defined(USE_DOT) || 1
+uint8x16_t inline tbm_mult_t8x8_simd(uint8x16_t a8x8_x2, uint8x16_t tb8x8_x2)
 {
+    uint8x16_t repeat8x2 = vcombine_u8(vdup_n_u8(0), vdup_n_u8(8));
     uint8x16_t acc_x2 = vdupq_n_u8(0);
-    uint8x16_t a8x8_x2 = vld1q_u8((uint8_t *)a8x8);
-    uint8x16_t tb8x8_x2 = vld1q_u8((uint8_t *)tb8x8);
+    #pragma GCC unroll 8
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
     {
-        uint8x16_t repeat = vcombine_u8(
-            vdup_lane_u8(vget_low_u8(tb8x8_x2), i_bit),
-            vdup_lane_u8(vget_high_u8(tb8x8_x2), i_bit));
+        // uint8x16_t repeat = vcombine_u8(
+        //     vdup_lane_u8(vget_low_u8(tb8x8_x2), i_bit),
+        //     vdup_lane_u8(vget_high_u8(tb8x8_x2), i_bit));
+        uint8x16_t repeat = vqtbl1q_u8(tb8x8_x2, repeat8x2);
+        tb8x8_x2 = vreinterpretq_u8_u64(
+            vshrq_n_u64(vreinterpretq_u64_u8(tb8x8_x2), 8));
         uint8x16_t prod = vandq_u8(a8x8_x2, repeat);
         prod = vcntq_u8(prod);
         prod = vandq_u8(prod, vdupq_n_u8(1));
         prod = vshlq_n_u8(prod, 7-i_bit);
         acc_x2 = vorrq_u8(acc_x2, prod);
     }
-    vst1q_u8((uint8_t *)out, acc_x2);
+    return acc_x2;
 }
+#else
+// non-functional!
+uint8x16_t inline tbm_mult_t8x8_simd(uint8x16_t a8x8_x2, uint8x16_t tb8x8_x2)
+{
+    uint8x16_t test_bit = vdupq_n_u8(0);
+    uint8x16_t acc_x2 = vdupq_n_u8(0);
+    #pragma GCC unroll 8
+    for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
+    {
+        uint8x16_t prod = vandq_u8(
+            vtstq_u8(a8x8_x2, test_bit), vtstq_u8(tb8x8_x2, test_bit));
+        test_bit = vshlq_n_u8(test_bit, 1);
+        acc_x2 = vorrq_u8(acc_x2, prod);
+    }
+    return acc_x2;
+}
+#endif
 
+static void inline tbm_mult_t8x8_x4(
+    uint64_t a[4], uint64_t b[4], uint64_t out[4])
+{
+    uint8x16_t a_x2 = vld1q_u8((uint8_t *)a);
+    uint8x16_t b_x2 = vld1q_u8((uint8_t *)b);
+    vst1q_u8((uint8_t *)out, tbm_mult_t8x8_simd(a_x2, b_x2));
+    a_x2 = vld1q_u8((uint8_t *)(a+2));
+    b_x2 = vld1q_u8((uint8_t *)(b+2));
+    vst1q_u8((uint8_t *)(out+2), tbm_mult_t8x8_simd(a_x2, b_x2));
+}
 #else
 uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
 {
@@ -519,6 +549,12 @@ uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
     }
     return acc;
 }
+
+static void inline tbm_mult_t8x8_x4(uint64_t a[4], uint64_t b[4], uint64_t out[4])
+{
+    for (uint8_t i_prod = 0; i_prod < 4; i_prod++)
+        out[i_prod] = tbm_mult_t8x8_u64(a[i_prod], b[i_prod]);
+}
 #endif
 
 uint64_t inline tbm_dot_t(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
@@ -530,10 +566,22 @@ uint64_t inline tbm_dot_t(uint64_t a[4], uint64_t b[4], uint32_t n_dot)
 }
 
 static void __attribute__ ((noinline)) tbm_mult_t_ncol8_1(
-    uint64_t *in, uint64_t n_mat, uint64_t *in2t, uint64_t *out)
+    uint64_t *in, uint64_t n_mat, uint64_t *in2, uint64_t *out)
 {
-    for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
-        out[i_mat] = tbm_mult_t8x8_u64(in[i_mat], in2t[i_mat]);
+    uint64_t i8x8; //!< index for 4 8x8 blocks
+    for (i8x8 = 0; i8x8 < n_mat/4*4; i8x8 += 4)
+    {
+        tbm_mult_t8x8_x4(in, in2, out);
+        in += 4;
+        in2 += 4;
+        out += 4;
+    }
+    if (i8x8 == n_mat)
+        return; // all blocks are processed
+    uint64_t tmp[4];
+    tbm_mult_t8x8_x4(in, in2, tmp);
+    for (i8x8 = 0; i8x8 < (n_mat & 3); i8x8++)
+        out[i8x8] = tmp[i8x8];
 }
 
 #pragma GCC push_options //-----------------------------------------------------
