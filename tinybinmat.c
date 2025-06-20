@@ -92,28 +92,36 @@ void tbm_sprint8_gfnio(
 
 //______________________________________________________________________________
 uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
-{
-    // input is 8x8 bit matrix with 8 rows: 0x0001020304050607
+{// input is 8x8 bit matrix with 8 rows: 0x0001020304050607
     // 1st bit in rows is LSB, thus reversed compared to matrix notation
     uint64_t ur_mask4x4 = 0xf0f0f0f000000000; // up right 4x4 bits
-    // uint64_t = dl_mask4x4 = 0x0f0f0f0f00000000; // down left 4x4 bits
-    // dl_mask4x4 == ur_mask4x4 << (4*8-4)
+    // uint64_t = ur_mask4x4 = 0xf0f0f0f000000000;
+    //            dl_mask4x4 >> (4*8+4) // down left 4x4 bits
+    //            dl_mask4x4 = 0x000000000f0f0f0f
+    // fedcba9876543210
+    // f0f0f0f000000000
+    // f d b 9
+    //          f d b 9
+    //          6 4 2 0
+    // 6 4 2 0
+    // 6e4c2a087f5d3b19
+    //----------------
     uint64_t xor = in8x8 ^ (in8x8 << 36);
     xor &= ur_mask4x4;
     in8x8 ^= xor;
     xor >>= 36;
     in8x8 ^= xor;
     uint64_t ur_mask2x2 = 0xcccc0000cccc0000; // 4 up right 2x2 bits
-    // uint64_t = dl_mask2x2 = 0x3333000033330000; // 4 down left 2x2 bits
-    // dl_mask2x2 == ur_mask2x2 << (2*8-2)
+    // uint64_t = dl_mask2x2 = 0x0000333300003333; // 4 down left 2x2 bits
+    // dl_mask2x2 == ur_mask2x2 >> (2*8+2)
     xor = in8x8 ^ (in8x8 << 18);
     xor &= ur_mask2x2;
     in8x8 ^= xor;
     xor >>= 18;
     in8x8 ^= xor;
     uint64_t ur_mask1x1 = 0xaa00aa00aa00aa00; // 16 up right 1x1 bits
-    // uint64_t = dl_mask1x1 = 0x5500550055005500; // 16 down left 1x1 bits
-    // dl_mask1x1 == ur_mask1x1 << (8-1)
+    // uint64_t = dl_mask1x1 = 0x0055005500550055; // 16 down left 1x1 bits
+    // dl_mask1x1 == ur_mask1x1 >> (8+1)
     xor = in8x8 ^ (in8x8 << 9);
     xor &= ur_mask1x1;
     in8x8 ^= xor;
@@ -126,12 +134,29 @@ uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
 static void inline tbm_transpose8x8_simd(uint64_t in[2])
 {
     uint64x2_t in8x8 = vld1q_u64(in);
+    uint64x2_t xor;
+#if 0
     uint64x2_t ur_mask4x4 = vdupq_n_u64(0xf0f0f0f000000000);
-    uint64x2_t xor = veorq_u64(in8x8, vshlq_n_u64(in8x8, 36));
+    xor = veorq_u64(in8x8, vshlq_n_u64(in8x8, 36));
     xor = vandq_u64(xor, ur_mask4x4);
     in8x8 = veorq_u64(in8x8, xor);
     xor = vshrq_n_u64(xor, 36);
     in8x8 = veorq_u64(in8x8, xor);
+#else
+    // we want:
+    // 6e4c2a087f5d3b19
+    // two options are possible:
+    // .6.4.2.0.7.5.3.1 (bof shli(x, x >> 4, 32)) and:
+    // .e.c.a.8.f.d.b.9 (ok shri(x, x, 36))
+    // or
+    // 6.4.2.0.7.5.3.1. (ok shli(x, x, 36)) and:
+    // e.c.a.8.f.d.b.9. bof shri(x, x << 4, 32))
+    uint64x2_t in_6420_7531 = vsliq_n_u64(vshrq_n_u64(in8x8, 4), in8x8, 32);
+    uint64x2_t in_eca8_fdb9 = vsriq_n_u64(in8x8, in8x8, 36);
+    in8x8 = vreinterpretq_u64_u8(vsliq_n_u8(
+        vreinterpretq_u8_u64(in_eca8_fdb9),
+        vreinterpretq_u8_u64(in_6420_7531), 4));
+#endif
     uint64x2_t ur_mask2x2 = vdupq_n_u64(0xcccc0000cccc0000);
     xor = veorq_u64(in8x8, vshlq_n_u64(in8x8, 18));
     xor = vandq_u64(xor, ur_mask2x2);
@@ -473,10 +498,7 @@ uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
         uint8x8_t repeat = vdup_lane_u8(_tb8x8, i_bit);
         uint8x8_t prod = vand_u8(_a8x8, repeat);
         prod = vcnt_u8(prod);
-        prod = vand_u8(prod, vdup_n_u8(1));
-        // acc = vshl_n_u8(out, 1);
-        prod = vshl_n_u8(prod, 7-i_bit);
-        acc = vorr_u8(acc, prod);
+        acc = vsli_n_u8(prod, acc, 1);
     }
     return vdupd_lane_u64(vreinterpret_u64_u8(acc), 0);
 }
@@ -497,9 +519,7 @@ uint8x16_t inline tbm_mult_t8x8_simd(uint8x16_t a8x8_x2, uint8x16_t tb8x8_x2)
             vshrq_n_u64(vreinterpretq_u64_u8(tb8x8_x2), 8));
         uint8x16_t prod = vandq_u8(a8x8_x2, repeat);
         prod = vcntq_u8(prod);
-        prod = vandq_u8(prod, vdupq_n_u8(1));
-        prod = vshlq_n_u8(prod, 7-i_bit);
-        acc_x2 = vorrq_u8(acc_x2, prod);
+        acc_x2 = vsliq_n_u8(prod, acc_x2, 1);
     }
     return acc_x2;
 }
