@@ -375,9 +375,7 @@ uint64_t inline tbm_mult8x8_u64rev(uint64_t a, uint64_t b)
 
 static uint8x16_t inline tbm_mult8x8_simd(uint8x16_t a, uint8x16_t b)
 {
-    uint8x16_t repeat8x2 = vdupq_n_u8(0);
-    repeat8x2 = vreinterpretq_u8_u64(vsetq_lane_u64(
-        0x0808080808080808ull, vreinterpretq_u64_u8(repeat8x2), 1));
+    uint8x16_t repeat8x2 = vcombine_u8(vdup_n_u8(0), vdup_n_u8(8));
     uint8x16_t out = vdupq_n_u8(0);
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
     {
@@ -523,7 +521,6 @@ void __SUFFIX(tbm_mult) (
 
 //______________________________________________________________________________
 // multiply two 8x8 bit matrices with the second matrix transposed
-//#define USE_SIMD
 #if defined(USE_SIMD)
 uint64_t inline tbm_mult_t8x8_u64(uint64_t a8x8, uint64_t tb8x8)
 {
@@ -562,18 +559,23 @@ uint8x16_t inline tbm_mult_t8x8_simd(uint8x16_t a8x8_x2, uint8x16_t tb8x8_x2)
     return acc_x2;
 }
 #else
-// non-functional!
-uint8x16_t inline tbm_mult_t8x8_simd(uint8x16_t a8x8_x2, uint8x16_t tb8x8_x2)
+static uint8x16_t inline tbm_mult_t8x8_simd(
+    uint8x16_t a8x8_x2, uint8x16_t tb8x8_x2)
 {
-    uint8x16_t test_bit = vdupq_n_u8(0);
+    uint8x16_t repeat8x2 = vcombine_u8(vdup_n_u8(0), vdup_n_u8(8));
     uint8x16_t acc_x2 = vdupq_n_u8(0);
+    uint8x16_t test_bit = vdupq_n_u8(128);
+    uint8x16_t b8x8_x2 = vreinterpretq_u8_u64(
+        tbm_transpose8x8_simd(vreinterpretq_u64_u8(tb8x8_x2)));
     #pragma GCC unroll 8
     for (uint8_t i_bit = 0; i_bit < 8; i_bit++)
     {
-        uint8x16_t prod = vandq_u8(
-            vtstq_u8(a8x8_x2, test_bit), vtstq_u8(tb8x8_x2, test_bit));
-        test_bit = vshlq_n_u8(test_bit, 1);
-        acc_x2 = vorrq_u8(acc_x2, prod);
+        uint8x16_t repeat = vqtbl1q_u8(b8x8_x2, repeat8x2);
+        b8x8_x2 = vreinterpretq_u8_u64(
+            vshrq_n_u64(vreinterpretq_u64_u8(b8x8_x2), 8));
+        uint8x16_t prod = vandq_u8(vtstq_u8(a8x8_x2, test_bit), repeat);
+        test_bit = vshrq_n_u8(test_bit, 1);
+        acc_x2 = veorq_u8(acc_x2, prod);
     }
     return acc_x2;
 }
