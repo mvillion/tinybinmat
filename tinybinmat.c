@@ -131,11 +131,19 @@ uint64_t inline tbm_transpose8x8_u64(uint64_t in8x8)
 }
 
 #if defined(USE_SIMD)
+#if 0
 static void inline tbm_transpose8x8_simd(uint64_t in[2])
 {
     uint64x2_t in8x8 = vld1q_u64(in);
     uint64x2_t xor;
 #if 0
+    // fedcba9876543210 <- input
+    // f0f0f0f000000000
+    // f d b 9
+    //          f d b 9
+    //          6 4 2 0
+    // 6 4 2 0
+    // 6e4c2a087f5d3b19
     uint64x2_t ur_mask4x4 = vdupq_n_u64(0xf0f0f0f000000000);
     xor = veorq_u64(in8x8, vshlq_n_u64(in8x8, 36));
     xor = vandq_u64(xor, ur_mask4x4);
@@ -171,11 +179,31 @@ static void inline tbm_transpose8x8_simd(uint64_t in[2])
     in8x8 = veorq_u64(in8x8, xor);
     vst1q_u64(in, in8x8);
 }
+#else
+static uint64x2_t inline tbm_transpose8x8_simd(uint64x2_t in8x8)
+{
+    // we want:
+    // 6.4.2.0..f.d.b.9
+    // 6543210..fedcba9
+    uint64x2_t mask4x4 = vdupq_n_u64(0xf0f0f0f00f0f0f0f);
+    uint64x2_t in_6420_fdb9 = vsliq_n_u64(vshrq_n_u64(in8x8, 36), in8x8, 36);
+    in8x8 = vbslq_u64(mask4x4, in_6420_fdb9, in8x8);
+    uint64x2_t mask2x2 = vdupq_n_u64(0xcccc3333cccc3333);
+    uint32x4_t in8x8_32 = vreinterpretq_u32_u64(in8x8);
+    uint32x4_t swap32 = vsliq_n_u32(vshrq_n_u32(in8x8_32, 18), in8x8_32, 18);
+    in8x8 = vbslq_u64(mask2x2, vreinterpretq_u64_u32(swap32), in8x8);
+    uint64x2_t mask1x1 = vdupq_n_u64(0xaa55aa55aa55aa55);
+    uint16x8_t in8x8_16 = vreinterpretq_u16_u64(in8x8);
+    uint16x8_t swap16 = vsliq_n_u16(vshrq_n_u16(in8x8_16, 9), in8x8_16, 9);
+    in8x8 = vbslq_u64(mask1x1, vreinterpretq_u64_u16(swap16), in8x8);
+    return in8x8;
+}
+#endif
 
 static void inline tbm_transpose8x8_x4(uint64_t in[4])
 {
     for (uint8_t i_prod = 0; i_prod < 4; i_prod += 2)
-        tbm_transpose8x8_simd(in+i_prod);
+        vst1q_u64(in+i_prod, tbm_transpose8x8_simd(vld1q_u64(in+i_prod)));
 }
 #else
 static void inline tbm_transpose8x8_x4(uint64_t in[4])
@@ -191,18 +219,28 @@ static __attribute__ ((noinline)) void tbm_transpose_1d(
     uint64_t i8x8; //!< index for 4 8x8 blocks
     for (i8x8 = 0; i8x8 < n8x8/4*4; i8x8 += 4)
     {
+#if defined(USE_SIMD)
+        vst1q_u64(out+0, tbm_transpose8x8_simd(vld1q_u64(in+0)));
+        vst1q_u64(out+2, tbm_transpose8x8_simd(vld1q_u64(in+2)));
+#else
         for (uint8_t i_copy = 0; i_copy < 4; i_copy++)
             out[i_copy] = in[i_copy];
         tbm_transpose8x8_x4(out);
+#endif
         in += 4;
         out += 4;
     }
     if (i8x8 == n8x8)
         return; // all blocks are processed
     uint64_t tmp[4];
-        for (uint8_t i_copy = 0; i_copy < 4; i_copy++)
-            tmp[i_copy] = in[i_copy];
+#if defined(USE_SIMD)
+    vst1q_u64(tmp+0, tbm_transpose8x8_simd(vld1q_u64(in+0)));
+    vst1q_u64(tmp+2, tbm_transpose8x8_simd(vld1q_u64(in+2)));
+#else
+    for (uint8_t i_copy = 0; i_copy < 4; i_copy++)
+        tmp[i_copy] = in[i_copy];
     tbm_transpose8x8_x4(tmp);
+#endif
     for (i8x8 = 0; i8x8 < (n8x8 & 3); i8x8++)
         out[i8x8] = tmp[i8x8];
 }
