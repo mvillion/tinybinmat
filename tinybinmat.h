@@ -34,11 +34,9 @@ tbm_transpose_fun_t tbm_transpose_simd;
 tbm_mult_fun_t tbm_mult_simd;
 tbm_mult_fun_t tbm_mult_t_simd;
 #else
-//#if !defined(__SUFFIX)
 #define tbm_transpose_simd NULL
 #define tbm_mult_simd NULL
 #define tbm_mult_t_simd NULL
-//#endif
 #endif
 
 #endif

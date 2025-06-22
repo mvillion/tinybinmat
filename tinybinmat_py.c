@@ -1,4 +1,5 @@
 #include "tinybinmat.h"
+#include "tinybinmat_perm.h"
 #include "tinybinmat_avx2.h"
 #include "tinybinmat_utils.h"
 
@@ -106,6 +107,35 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
 
     // decrease the reference count
     Py_DECREF(arr_in);
+    return arr_out;
+}
+
+static PyObject* tbm_eye(PyObject *self, PyObject *arg)
+{
+    uint64_t n_mat;
+    uint32_t n_row_col;
+    int ok = PyArg_ParseTuple(arg, "IK", &n_row_col, &n_mat);
+    if (!ok)
+        return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
+
+    int py_type = NPY_UINT64;
+    int n_dim_out = 3;
+
+    // create output dimensions
+    uint32_t n_dim_o = (n_row_col+7)/8; //!< number of rows/columns in octets
+    npy_intp *out_dim = (npy_intp *)malloc(n_dim_out*sizeof(npy_intp));
+    out_dim[0] = n_mat;
+    out_dim[1] = n_dim_o;
+    out_dim[2] = n_dim_o;
+    PyObject *arr_out = PyArray_SimpleNew(n_dim_out, out_dim, py_type);
+    free(out_dim);
+
+    uint64_t *out = (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out);
+    if (0 < n_mat)
+        tbm_eye_u64(n_row_col, out);
+    for (uint64_t i_mat = 1; i_mat < n_mat; i_mat++)
+        memcpy(
+            out+i_mat*n_dim_o*n_dim_o, out, n_dim_o*n_dim_o*sizeof(uint64_t));
     return arr_out;
 }
 
@@ -363,6 +393,10 @@ static PyMethodDef method_def[] = {
     {
         "encode", (PyCFunction)tbm_encode, METH_VARARGS | METH_KEYWORDS,
         "encode a square matrix into a tinybinmat"
+    },
+    {
+        "eye", tbm_eye, METH_VARARGS,
+        "create eye matrix in tinybinmat gfni format"
     },
     {
         "mult", (PyCFunction)tbm_mult, METH_VARARGS | METH_KEYWORDS,

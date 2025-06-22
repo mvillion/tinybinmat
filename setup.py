@@ -31,20 +31,22 @@ if force_aarch64:
     is_aarch64 = True
     os.environ["CC"] = "arm-none-eabi-gcc"
 
+lib_list_u64 = ["tinybinmat", "tinybinmat_perm"]
+
 cflag = ["-O3"]
 cflag += ["-fdump-tree-vect", "-ftree-vectorizer-verbose=1"]
 extra_cflag = []
 lib_list = []
 
 if is_aarch64:
-    for lib_name in ["tinybinmat"]:
+    for lib_name in lib_list_u64:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
     cflag += ["-march=armv8-a+simd", "-DUSE_SIMD"]
     for lib_name in ["tinybinmat_simd"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 else:
     cflag += ["-mavx2"]
-    for lib_name in ["tinybinmat", "tinybinmat_avx2"]:
+    for lib_name in lib_list_u64+["tinybinmat_avx2"]:
         lib_list.append((lib_name, src_from_name(lib_name, cflag=cflag)))
 
     cflag += ["-mgfni", "-DUSE_GFNI"]
