@@ -6,8 +6,12 @@ void tbm_circul_u64_single(uint8_t *in, uint32_t n_row_col, uint64_t *out)
 {
     uint32_t n_dim_o = (n_row_col+7)/8; //!< number of rows/columns in octets
     uint8_t n_zero = 8*n_dim_o-n_row_col; //!< number of rows/columns to clear
-    printf("tbm_circul_u64_single n_row_col %u\n", n_row_col);
-    printf("tbm_circul_u64_single n_dim_o %u n_zero %u\n", n_dim_o, n_zero);
+    if (0 < n_zero)
+    {
+        // clear unused bits in the last columns
+        uint8_t zero_mask = 0xff >> n_zero;
+        in[n_dim_o-1] &= zero_mask;
+    }
 
     // clear unused bits in the last columns
     uint64_t zero_mask = 0xff >> n_zero;
