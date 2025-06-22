@@ -12,6 +12,7 @@ Options:
 """
 import tinybinmat as tbm
 import numpy as np
+import sys
 
 
 if __name__ == "__main__":
