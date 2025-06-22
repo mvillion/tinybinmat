@@ -31,7 +31,7 @@ if force_aarch64:
     is_aarch64 = True
     os.environ["CC"] = "arm-none-eabi-gcc"
 
-lib_list_u64 = ["tinybinmat", "tinybinmat_perm"]
+lib_list_u64 = ["tinybinmat", "tinybinmat_conv", "tinybinmat_perm"]
 
 cflag = ["-O3"]
 cflag += ["-fdump-tree-vect", "-ftree-vectorizer-verbose=1"]

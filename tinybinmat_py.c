@@ -1,4 +1,5 @@
 #include "tinybinmat.h"
+#include "tinybinmat_conv.h"
 #include "tinybinmat_perm.h"
 #include "tinybinmat_avx2.h"
 #include "tinybinmat_utils.h"
@@ -71,7 +72,7 @@ static PyObject* tbm_encode(PyObject *self, PyObject *arg, PyObject *kwarg)
     int n_dim = PyArray_NDIM(arr_in);
     if (n_dim < 2)
         return PyErr_Format(
-            PyExc_RuntimeError, "input need at least 2 dimension");
+            PyExc_RuntimeError, "input need at least 2 dimensions");
     npy_intp n_col = PyArray_DIM(arr_in, n_dim-1);
     npy_intp n_row = PyArray_DIM(arr_in, n_dim-2);
 
@@ -136,6 +137,61 @@ static PyObject* tbm_eye(PyObject *self, PyObject *arg)
     for (uint64_t i_mat = 1; i_mat < n_mat; i_mat++)
         memcpy(
             out+i_mat*n_dim_o*n_dim_o, out, n_dim_o*n_dim_o*sizeof(uint64_t));
+    return arr_out;
+}
+
+static PyObject* tbm_circul(PyObject *self, PyObject *arg)
+{
+    PyArrayObject *arr_in; //!< 1st array of matrices to multiply
+    uint32_t n_row_col;
+
+    int ok = PyArg_ParseTuple(arg, "O!I", &PyArray_Type, &arr_in, &n_row_col);
+    if (!ok)
+        return PyErr_Format(PyExc_RuntimeError, "failed to parse parameters");
+    if (arr_in == NULL) return NULL;
+
+    int n_dim = PyArray_NDIM(arr_in);
+    if (n_dim < 1)
+        return PyErr_Format(
+            PyExc_RuntimeError, "input need at least 1 dimension");
+    npy_intp n_dim_o_in = PyArray_DIM(arr_in, n_dim-1);
+    uint32_t n_dim_o = (n_row_col+7)/8; //!< number of rows/columns in octets
+    if (n_dim_o != n_dim_o_in)
+        return PyErr_Format(
+            PyExc_RuntimeError,
+            "last dimension %d octets does not match n_row/n_col %d",
+            n_dim_o_in, n_row_col);
+
+    npy_intp size_type = PyArray_ITEMSIZE(arr_in);
+    if (size_type != 1)
+        return PyErr_Format(
+            PyExc_RuntimeError, "input type size shall be equal to 1 octet");
+
+    uint64_t n_mat = (uint64_t)(PyArray_SIZE(arr_in)/n_dim_o);
+
+    int py_type = NPY_UINT64;
+    int n_dim_out = n_dim+1;
+
+    // create output dimensions
+    npy_intp *out_dim = (npy_intp *)malloc(n_dim_out*sizeof(npy_intp));
+    memcpy(out_dim, PyArray_DIMS(arr_in), (n_dim_out-1)*sizeof(npy_intp));
+    out_dim[n_dim_out-1] = n_dim_o;
+    out_dim[n_dim_out-2] = n_dim_o;
+    PyObject *arr_out = PyArray_SimpleNew(n_dim_out, out_dim, py_type);
+
+    // ensure the input array is contiguous.
+    // PyArray_GETCONTIGUOUS will increase the reference count.
+    arr_in = PyArray_GETCONTIGUOUS(arr_in);
+    free(out_dim);
+
+    uint8_t *in = (uint8_t *)PyArray_DATA(arr_in);
+    printf("tbm_circul n_row_col %u n_mat %lu\n", n_row_col, n_mat);
+    tbm_circul_u64(
+        in, n_mat, n_row_col,
+        (uint64_t *)PyArray_DATA((PyArrayObject *)arr_out));
+
+    // decrease the reference count
+    Py_DECREF(arr_in);
     return arr_out;
 }
 
@@ -352,7 +408,7 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
 
     if (n_dim < 2)
         return PyErr_Format(
-            PyExc_RuntimeError, "input need at least 2 dimensiond");
+            PyExc_RuntimeError, "input need at least 2 dimensions");
     n_col8 = PyArray_DIM(arr_in, n_dim-1);
     n_row8 = PyArray_DIM(arr_in, n_dim-2);
     n_mat /= n_col8*n_row8;
@@ -390,6 +446,10 @@ static PyObject* tbm_transpose(PyObject *self, PyObject *arg, PyObject *kwarg)
 //______________________________________________________________________________
 // set up the methods table
 static PyMethodDef method_def[] = {
+    {
+        "circul", tbm_circul, METH_VARARGS,
+        "create circulant matrix in tinybinmat gfni format"
+    },
     {
         "encode", (PyCFunction)tbm_encode, METH_VARARGS | METH_KEYWORDS,
         "encode a square matrix into a tinybinmat"
