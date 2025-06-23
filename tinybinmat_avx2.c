@@ -4,6 +4,7 @@
 
 #if defined(USE_GFNI)
 #define __SUFFIX(fun) fun##_gfni
+extern void print_avx2_uint64(__m256i reg);
 #else
 #define __SUFFIX(fun) fun##_avx2
 
@@ -112,6 +113,7 @@ static __attribute__ ((noinline)) void tbm_transpose_4x4(
 {
     for (uint64_t i_mat = 0; i_mat < n_mat; i_mat++)
     {
+#if 1
         __m256i in3210 = _mm256_loadu_si256(in+i_mat*4+0);
         __m256i in7654 = _mm256_loadu_si256(in+i_mat*4+1);
         __m256i inba98 = _mm256_loadu_si256(in+i_mat*4+2);
@@ -126,7 +128,14 @@ static __attribute__ ((noinline)) void tbm_transpose_4x4(
         __m256i ind951 = _mm256_unpackhi_epi64(in9810, indc54);
         __m256i inea62 = _mm256_unpacklo_epi64(inba32, infe76);
         __m256i infb73 = _mm256_unpackhi_epi64(inba32, infe76);
-
+#else
+        __m256i stride4 = _mm256_set_epi64x(0xc, 0x8, 0x4, 0x0);
+        long long int *in64 = (long long int *)(in+i_mat*4);
+        __m256i inc840 = _mm256_i64gather_epi64(in64+0, stride4, 8);
+        __m256i ind951 = _mm256_i64gather_epi64(in64+1, stride4, 8);
+        __m256i inea62 = _mm256_i64gather_epi64(in64+2, stride4, 8);
+        __m256i infb73 = _mm256_i64gather_epi64(in64+3, stride4, 8);
+#endif
         _mm256_storeu_si256(out+i_mat*4+0, tbm_transpose8x8_m256i(inc840));
         _mm256_storeu_si256(out+i_mat*4+1, tbm_transpose8x8_m256i(ind951));
         _mm256_storeu_si256(out+i_mat*4+2, tbm_transpose8x8_m256i(inea62));
